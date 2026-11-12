@@ -427,6 +427,13 @@ async function pinHash(pin,salt){const k=await crypto.subtle.importKey('raw',new
 async function setPin(pin){const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('ac_pin',{salt:b64(salt),hash:await pinHash(pin,salt)})}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
 let hiddenAt=0,failN=0,lockUntil=0;
+function pinSetup(){
+ if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
+ const o=document.createElement('div');o.id='pinset';o.style.cssText='position:fixed;inset:0;z-index:98;background:var(--g);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center';
+ const st='max-width:240px;text-align:center;font-size:20px;margin:8px 0';
+ o.innerHTML='<div style="font-size:44px">🔒</div><h2 style="margin:8px 0">Proteggi i dati dei clienti</h2><div style="max-width:300px">Scegli un codice di blocco (da 4 a 8 cifre): l’app lo chiederà ogni volta che la apri.</div><input id="psA" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Codice" style="'+st+';margin-top:16px"><input id="psB" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Ripeti il codice" style="'+st+'"><div id="psErr" style="min-height:22px;color:#ffd7d0"></div><button id="psGo" style="max-width:240px;width:100%;padding:13px;border:0;border-radius:11px;background:#fff;color:#0b3a66;font-weight:700;font-size:16px">Attiva il blocco</button>';
+ document.body.appendChild(o);
+ o.querySelector('#psGo').onclick=async()=>{const a=o.querySelector('#psA').value,b=o.querySelector('#psB').value,er=o.querySelector('#psErr');if(!/^\d{4,8}$/.test(a)){er.textContent='Il codice deve avere da 4 a 8 cifre';return}if(a!==b){er.textContent='I due codici non coincidono';return}await setPin(a);o.remove();toast('Blocco attivato')}}
 function showLock(){
  if(!LS.get('ac_pin',null)||document.getElementById('lock'))return;
  const o=document.createElement('div');o.id='lock';o.style.cssText='position:fixed;inset:0;z-index:99;background:var(--g);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center';
@@ -513,7 +520,7 @@ function settings(){
  ${[['auguri','🎂 Auguri'],['libero','✏️ Messaggio libero']].concat(fid().on?[['fid','🎟️ Fedeltà (premio pronto)']]:[]).map(([k,n])=>`<div class="sub fl"><b>${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
  <button class="btn w" style="margin-top:12px" id="sSave">Salva</button>
  <h2 style="font-size:15px;margin:14px 0 4px">🔑 Licenza</h2><div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div>${licId()}<input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
- ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Chiede un codice quando apri l’app (e se resta in background più di 2 minuti). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pOff" style="flex:1">Disattiva</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
+ ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Il codice è obbligatorio: l’app lo chiede quando la apri (e se resta in background più di 2 minuti). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
  <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>`);
@@ -532,7 +539,7 @@ function settings(){
  const pe=t=>{$('#pErr').textContent=t};
  const on=$('#pOn');if(on)on.onclick=async()=>{const a=$('#pNew').value,b=$('#pNew2').value;if(!/^\d{4,8}$/.test(a))return pe('Il codice deve avere da 4 a 8 cifre');if(a!==b)return pe('I due codici non coincidono');await setPin(a);toast('Blocco attivato');o.remove();settings()};
  const ch=$('#pChg');if(ch){ch.onclick=async()=>{if(!await checkPin($('#pCur').value))return pe('Codice attuale sbagliato');const a=$('#pNew').value;if(!/^\d{4,8}$/.test(a))return pe('Il nuovo codice deve avere da 4 a 8 cifre');await setPin(a);toast('Codice cambiato');o.remove();settings()};
-  $('#pOff').onclick=async()=>{if(!await checkPin($('#pCur').value))return pe('Codice attuale sbagliato');try{localStorage.removeItem('ac_pin')}catch(e){}toast('Blocco disattivato');o.remove();settings()}}
+  }
 }
 
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
@@ -541,7 +548,7 @@ showLock();
 draw();
 licInit().then(()=>{draw();if(locked())paywall()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){const was=LIC.st;licInit().then(()=>{if(LIC.st!==was)draw()})}});
-if(!S.tipi.length&&!S.clienti.length)setTimeout(welcome,200);
+if(!S.tipi.length&&!S.clienti.length)setTimeout(welcome,200);else setTimeout(pinSetup,200);
 
 </script>
 </body>
