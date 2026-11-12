@@ -291,7 +291,7 @@ function draw(){
  ({oggi:vOggi,msg:vMsg,clienti:vClienti,schede:vSchede,fid:vFid,prod:vProd})[tab]($('#main'))}
 
 function vOggi(m){
- const bo=bdays(0);let h='';
+ const bo=bdays(0);let h=licBanner();
  if(!S.clienti.length)h+=`<div class="card"><h2>👋 Benvenuto</h2><div class="sub" style="margin-bottom:10px">Comincia inserendo i tuoi clienti: poi aggiungi le schede e l’app ti ricorda chi avvisare.</div><button class="btn w" data-act="newCli">＋ Aggiungi il primo cliente</button></div>`;
  const lowP=prods().filter(isLow);if(lowP.length)h+=`<div class="card"><h2>📦 Da rifornire <span class="pill a">${lowP.length}</span></h2>${lowP.slice(0,5).map(p=>`<div class="row"><div class="x"><b>${esc(p.nome)}</b><span class="sub">${(Number(p.qta)||0)<=0?'finito':'ne restano '+p.qta}</span></div><button class="btn s o" data-act="rif" data-id="${p.id}">Rifornisci</button></div>`).join('')}</div>`;
  const lastBk=LS.get('ac_bk',0);if(S.clienti.length&&Date.now()-lastBk>7*864e5)h+=`<div class="card"><h2>💾 Copia di sicurezza</h2><div class="sub" style="margin-bottom:10px">${lastBk?'Ultima copia: '+fmtD(isoOf(new Date(lastBk)))+'.':'Non hai ancora salvato nessuna copia.'} I dati stanno solo su questo telefono: salvane una ogni tanto (serve anche per cambiare telefono).</div><button class="btn w" data-act="backup">Salva ora</button></div>`;
@@ -359,7 +359,7 @@ function vFid(m){
  const e=$('#fq');e.oninput=()=>{fq=e.value;clearTimeout(vFid.tm);vFid.tm=setTimeout(()=>{draw();const x=$('#fq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
  m.querySelectorAll('[data-fc]').forEach(r=>r.onclick=()=>fidSheet(cli(r.dataset.fc)));
  m.querySelectorAll('[data-fc2]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();fidSheet(cli(b.dataset.fc2))});
- m.querySelectorAll('[data-fp]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const c=cli(b.dataset.fp),x=fcd(c);if(x.t<n){x.t++;x.ult=todayIso();save()}toast(x.t>=n?'Card completa! 🎁':c.nome+': '+x.t+'/'+n);const y=scrollY;draw();scrollTo(0,y)});
+ m.querySelectorAll('[data-fp]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();if(locked()){paywall();return}const c=cli(b.dataset.fp),x=fcd(c);if(x.t<n){x.t++;x.ult=todayIso();save()}toast(x.t>=n?'Card completa! 🎁':c.nome+': '+x.t+'/'+n);const y=scrollY;draw();scrollTo(0,y)});
  bind(m)}
 
 function vSchede(m){
@@ -379,7 +379,7 @@ function vSchede(m){
  m.querySelectorAll('[data-es]').forEach(r=>r.onclick=()=>editScheda(S.schede.find(x=>x.id===r.dataset.es)));bind(m)}
 
 /* ---------- azioni ---------- */
-function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{const a=b.dataset.act,id=b.dataset.id;
+function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{const a=b.dataset.act,id=b.dataset.id;if(locked()&&!['settings','backup','gotoMsg','gotoFid'].includes(a)){paywall();return}
  if(a==='backup')backupFlow();else if(a==='rif')rifornisci(prods().find(p=>p.id===id));else if(a==='newProd')editProdotto();else if(a==='scanProd')scanBarcode(code=>{const p=prods().find(x=>x.codice===code);if(p)rifornisci(p);else{toast('Prodotto nuovo: compila i dati');editProdotto(null,code)}});else if(a==='newCli')editCliente();else if(a==='newScheda')editScheda(null,stipo);else if(a==='settings')settings();
  else if(a==='auguri'){const c=cli(id),r={nome:c.nome,tel:c.tel,vars:{}},k='a|'+c.id+'|'+new Date().getFullYear();if(sendOne(r,fill(tpl('auguri'),r,false),'sms',k))setTimeout(draw,500)}
  else if(a==='avvisa'){const x=S.schede.find(v=>v.id===id),t=tipo(x.tid),o=dueItems(t).find(v=>v.x.id===id);if(!o)return;const r=recOf(o);if(sendOne(r,fill(t.tpl||defTpl('T:'+t.id),r,false),'sms',r.id))setTimeout(draw,500)}
@@ -420,6 +420,47 @@ function backupFlow(){
  $('#bGo').onclick=async()=>{const pw=$('#bPw').value;let txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()});if(pw){try{txt=await encText(txt,pw)}catch(e){toast('Cifratura non disponibile: salvo senza password')}}o.remove();shareFile(txt,'avvisa-clienti-backup-'+todayIso()+(pw?'-protetto':'')+'.json')}}
 function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.prod=S.prod||[];S.tags=[];S.clienti.forEach(c=>{delete c.tags});save();LS.set('ac_sent',j.sent||{});return true}
 
+/* ---------- prova gratuita e licenza ---------- */
+const LICPUB={"kty":"EC","crv":"P-256","x":"H8FCPS-DiAXbWBd55LY415SzhHNKbm1AvAKO_T5eBfQ","y":"lbAibTXtfuFDzLYhqwXfPCHwUXVcYDFeQ9cKqtGOx9E"};
+const LICWA='393275938112',LICTEL='327 593 8112',LICA=29,LICV=39,LICPROVA=14;
+const b64u=u=>b64(u).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64u=t=>{t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';return unb64(t)};
+let LIC={st:'check'};
+const locked=()=>LIC.st==='scadu';
+async function licVerify(key){
+ try{key=String(key||'').replace(/\s+/g,'');if(!key.startsWith('AC1-'))return null;const[p,sg]=key.slice(4).split('.');if(!p||!sg)return null;
+  const pub=await crypto.subtle.importKey('jwk',LICPUB,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+  const data=unb64u(p);if(!(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pub,unb64u(sg),data)))return null;
+  return JSON.parse(new TextDecoder().decode(data))}catch(e){return null}}
+async function licInit(){
+ let tr=LS.get('ac_trial',null);if(!tr){tr=todayIso();LS.set('ac_trial',tr)}
+ const key=LS.get('ac_lic',''),info=key?await licVerify(key):null,left=LICPROVA+daysTo(tr);
+ if(info&&(!info.e||info.e>=todayIso()))LIC={st:'ok',info};
+ else if(info)LIC={st:'scadu',motivo:'licenza',info};
+ else if(left>0)LIC={st:'prova',left};
+ else LIC={st:'scadu',motivo:'prova'}}
+async function licActivate(key){
+ const info=await licVerify(key);if(!info)return'Codice non valido: controlla di averlo incollato tutto';
+ if(info.e&&info.e<todayIso())return'Questa licenza è scaduta il '+fmtD(info.e);
+ LS.set('ac_lic',String(key).replace(/\s+/g,''));await licInit();return''}
+const licText=()=>LIC.st==='ok'?'✅ Licenza attiva'+(LIC.info.n?' per «'+LIC.info.n+'»':'')+(LIC.info.e?' · valida fino al '+fmtD(LIC.info.e):' · a vita'):LIC.st==='prova'?'🎁 Prova gratuita: restano '+LIC.left+(LIC.left===1?' giorno':' giorni'):LIC.st==='scadu'?'⛔ '+(LIC.motivo==='licenza'?'Licenza scaduta':'Prova terminata')+': l’app è in sola lettura':'';
+const licBuy=()=>`Annuale ${LICA} € · A vita ${LICV} € · per acquistarla scrivi su WhatsApp al ${LICTEL}`;
+function licBanner(){
+ if(LIC.st==='prova')return `<div class="card" style="border:1px solid ${LIC.left<=3?'#e0a090':'#cfd8de'}"><div class="sub" style="color:var(--t)"><b>🎁 Prova gratuita:</b> restano ${LIC.left} ${LIC.left===1?'giorno':'giorni'}.</div><button class="btn s o" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
+ if(LIC.st==='scadu')return `<div class="card" style="border:1px solid #e0a090"><div class="sub" style="color:var(--r)"><b>${LIC.motivo==='licenza'?'Licenza scaduta':'Prova terminata'}:</b> puoi vedere e salvare i dati, non inserirne di nuovi né inviare messaggi.</div><button class="btn s w" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
+ if(LIC.st==='ok'&&LIC.info.e&&daysTo(LIC.info.e)<=30)return `<div class="card"><div class="sub" style="color:var(--t)"><b>⏳ La licenza scade il ${fmtD(LIC.info.e)}.</b> Per rinnovarla scrivi su WhatsApp al ${LICTEL}.</div></div>`;
+ return''}
+function paywall(){
+ const wa='https://wa.me/'+LICWA+'?text='+encodeURIComponent('Buongiorno, vorrei attivare la licenza di Avvisa Clienti'+(S.shop.nome?' per '+S.shop.nome:'')+'.');
+ const o=sheet(`<h3>🔒 ${LIC.motivo==='licenza'?'Licenza scaduta':'Prova gratuita terminata'}</h3><div class="sub">I tuoi dati sono al sicuro: puoi vederli e salvarne una copia. Per inserire nuovi clienti e inviare messaggi serve la licenza.</div><div class="prev">${licBuy()}</div><a class="btn w" style="display:block;text-align:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener" href="${wa}">💬 Scrivi su WhatsApp</a><div class="sub fl">Hai già il codice di licenza?</div><input id="pwKey" placeholder="Incolla qui il codice"><div class="err" id="pwErr"></div><button class="btn w" id="pwGo" style="margin-top:8px">Attiva</button><button class="btn o w" style="margin-top:10px" id="pwBk">💾 Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="pwX">Chiudi (solo lettura)</button>`);
+ $('#pwX').onclick=()=>o.remove();$('#pwBk').onclick=()=>{o.remove();backupFlow()};
+ $('#pwGo').onclick=async()=>{const r=await licActivate($('#pwKey').value);if(r){$('#pwErr').textContent=r;return}o.remove();draw();toast('Licenza attivata, grazie!')}}
+{const f=formSheet;formSheet=function(){if(locked()){paywall();return}return f.apply(this,arguments)}}
+{const f=sendOne;sendOne=function(){if(locked()){paywall();return false}return f.apply(this,arguments)}}
+{const f=startSend;startSend=function(){if(locked()){paywall();return}return f.apply(this,arguments)}}
+{const f=fidSheet;fidSheet=function(){if(locked()){paywall();return}return f.apply(this,arguments)}}
+{const f=rifornisci;rifornisci=function(){if(locked()){paywall();return}return f.apply(this,arguments)}}
+
 /* ---------- primo avvio ---------- */
 function welcome(){
  const o=sheet(`<h3>Benvenuto 👋</h3><div class="sub">Due domande e sei pronto. Potrai cambiare tutto dalle impostazioni ⚙️.</div><div class="sub fl">Nome del tuo negozio</div><input id="wN" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo, compare nei messaggi)</div><input id="wI" placeholder="es. Via Roma 1, Udine"><div class="sub fl">Che tipo di attività hai?</div><select id="wP">${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${esc(p.nome)}</option>`).join('')}</select><div class="sub" style="margin-top:6px">Sceglie i tipi di scheda e i testi di partenza; puoi aggiungerne o crearne altri quando vuoi.</div><button class="btn w" style="margin-top:14px" id="wGo">Inizia</button>`);
@@ -440,6 +481,7 @@ function settings(){
  <h2 style="font-size:15px;margin:18px 0 4px">Altri modelli di messaggio</h2><div class="sub">I testi di ogni tipo di scheda si cambiano dal tipo stesso. Usa {nome} e {negozio}.</div>
  ${[['auguri','🎂 Auguri'],['libero','✏️ Messaggio libero']].concat(fid().on?[['fid','🎟️ Fedeltà (premio pronto)']]:[]).map(([k,n])=>`<div class="sub fl"><b>${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
  <button class="btn w" style="margin-top:12px" id="sSave">Salva</button>
+ <h2 style="font-size:15px;margin:14px 0 4px">🔑 Licenza</h2><div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div><input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
  ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Chiede un codice quando apri l’app (e se resta in background più di 2 minuti). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pOff" style="flex:1">Disattiva</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
  <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
@@ -455,6 +497,7 @@ function settings(){
  $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;let j;try{j=JSON.parse(await f.text())}catch(e){toast('Questo file non è una copia valida');return}
   const fin=jj=>{try{if(applyBackup(jj)){o.remove();draw();toast('Dati ripristinati')}}catch(e){toast('Questo file non è una copia valida')}};
   if(j.enc)askPw('Copia protetta','Scrivi la password scelta quando hai salvato la copia.',async pw=>{try{fin(await decObj(j,pw));return''}catch(e){return'Password sbagliata'}});else fin(j)};
+ $('#lcGo').onclick=async()=>{const r=await licActivate($('#lcKey').value);$('#lcErr').textContent=r;if(!r){toast('Licenza attivata, grazie!');o.remove();draw();settings()}};
  const pe=t=>{$('#pErr').textContent=t};
  const on=$('#pOn');if(on)on.onclick=async()=>{const a=$('#pNew').value,b=$('#pNew2').value;if(!/^\d{4,8}$/.test(a))return pe('Il codice deve avere da 4 a 8 cifre');if(a!==b)return pe('I due codici non coincidono');await setPin(a);toast('Blocco attivato');o.remove();settings()};
  const ch=$('#pChg');if(ch){ch.onclick=async()=>{if(!await checkPin($('#pCur').value))return pe('Codice attuale sbagliato');const a=$('#pNew').value;if(!/^\d{4,8}$/.test(a))return pe('Il nuovo codice deve avere da 4 a 8 cifre');await setPin(a);toast('Codice cambiato');o.remove();settings()};
@@ -465,6 +508,8 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
 showLock();
 draw();
+licInit().then(()=>{draw();if(locked())paywall()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){const was=LIC.st;licInit().then(()=>{if(LIC.st!==was)draw()})}});
 if(!S.tipi.length&&!S.clienti.length)setTimeout(welcome,200);
 
 </script>
