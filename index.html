@@ -426,6 +426,10 @@ const LICWA='393275938112',LICTEL='327 593 8112',LICA=29,LICV=39,LICPROVA=14;
 const b64u=u=>b64(u).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const unb64u=t=>{t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';return unb64(t)};
 let LIC={st:'check'};
+const DEVID=(()=>{let d=LS.get('ac_dev','');if(!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(d)){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',r=crypto.getRandomValues(new Uint8Array(8));d=[...r].map(x=>a[x%a.length]).join('');d=d.slice(0,4)+'-'+d.slice(4);LS.set('ac_dev',d)}return d})();
+const licTit=()=>LIC.motivo==='licenza'?'Licenza scaduta':LIC.motivo==='telefono'?'Licenza di un altro telefono':'Prova terminata';
+const idCopy=()=>{try{navigator.clipboard.writeText(DEVID);toast('ID copiato')}catch(e){toast('Scrivilo a mano: '+DEVID)}};
+const licId=()=>`<div class="sub" style="margin-top:8px">ID di questo telefono (serve per avere la licenza): <b style="font-size:16px;letter-spacing:1px;color:var(--t)">${DEVID}</b> <button class="btn s o" id="idCp" style="margin-left:6px">Copia</button></div>`;
 const locked=()=>LIC.st==='scadu';
 async function licVerify(key){
  try{key=String(key||'').replace(/\s+/g,'');if(!key.startsWith('AC1-'))return null;const[p,sg]=key.slice(4).split('.');if(!p||!sg)return null;
@@ -434,26 +438,27 @@ async function licVerify(key){
   return JSON.parse(new TextDecoder().decode(data))}catch(e){return null}}
 async function licInit(){
  let tr=LS.get('ac_trial',null);if(!tr){tr=todayIso();LS.set('ac_trial',tr)}
- const key=LS.get('ac_lic',''),info=key?await licVerify(key):null,left=LICPROVA+daysTo(tr);
+ const key=LS.get('ac_lic',''),info0=key?await licVerify(key):null,info=info0&&(!info0.d||info0.d===DEVID)?info0:null,left=LICPROVA+daysTo(tr);
  if(info&&(!info.e||info.e>=todayIso()))LIC={st:'ok',info};
  else if(info)LIC={st:'scadu',motivo:'licenza',info};
  else if(left>0)LIC={st:'prova',left};
- else LIC={st:'scadu',motivo:'prova'}}
+ else LIC={st:'scadu',motivo:info0?'telefono':'prova'}}
 async function licActivate(key){
  const info=await licVerify(key);if(!info)return'Codice non valido: controlla di averlo incollato tutto';
+ if(info.d&&info.d!==DEVID)return'Questo codice è per un altro telefono (ID '+info.d+'). Il tuo ID è '+DEVID+': mandalo per avere il codice giusto.';
  if(info.e&&info.e<todayIso())return'Questa licenza è scaduta il '+fmtD(info.e);
  LS.set('ac_lic',String(key).replace(/\s+/g,''));await licInit();return''}
-const licText=()=>LIC.st==='ok'?'✅ Licenza attiva'+(LIC.info.n?' per «'+LIC.info.n+'»':'')+(LIC.info.e?' · valida fino al '+fmtD(LIC.info.e):' · a vita'):LIC.st==='prova'?'🎁 Prova gratuita: restano '+LIC.left+(LIC.left===1?' giorno':' giorni'):LIC.st==='scadu'?'⛔ '+(LIC.motivo==='licenza'?'Licenza scaduta':'Prova terminata')+': l’app è in sola lettura':'';
+const licText=()=>LIC.st==='ok'?'✅ Licenza attiva'+(LIC.info.n?' per «'+LIC.info.n+'»':'')+(LIC.info.e?' · valida fino al '+fmtD(LIC.info.e):' · a vita'):LIC.st==='prova'?'🎁 Prova gratuita: restano '+LIC.left+(LIC.left===1?' giorno':' giorni'):LIC.st==='scadu'?'⛔ '+(licTit())+': l’app è in sola lettura':'';
 const licBuy=()=>`Annuale ${LICA} € · A vita ${LICV} € · per acquistarla scrivi su WhatsApp al ${LICTEL}`;
 function licBanner(){
  if(LIC.st==='prova')return `<div class="card" style="border:1px solid ${LIC.left<=3?'#e0a090':'#cfd8de'}"><div class="sub" style="color:var(--t)"><b>🎁 Prova gratuita:</b> restano ${LIC.left} ${LIC.left===1?'giorno':'giorni'}.</div><button class="btn s o" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
- if(LIC.st==='scadu')return `<div class="card" style="border:1px solid #e0a090"><div class="sub" style="color:var(--r)"><b>${LIC.motivo==='licenza'?'Licenza scaduta':'Prova terminata'}:</b> puoi vedere e salvare i dati, non inserirne di nuovi né inviare messaggi.</div><button class="btn s w" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
+ if(LIC.st==='scadu')return `<div class="card" style="border:1px solid #e0a090"><div class="sub" style="color:var(--r)"><b>${licTit()}:</b> puoi vedere e salvare i dati, non inserirne di nuovi né inviare messaggi.</div><button class="btn s w" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
  if(LIC.st==='ok'&&LIC.info.e&&daysTo(LIC.info.e)<=30)return `<div class="card"><div class="sub" style="color:var(--t)"><b>⏳ La licenza scade il ${fmtD(LIC.info.e)}.</b> Per rinnovarla scrivi su WhatsApp al ${LICTEL}.</div></div>`;
  return''}
 function paywall(){
- const wa='https://wa.me/'+LICWA+'?text='+encodeURIComponent('Buongiorno, vorrei attivare la licenza di Avvisa Clienti'+(S.shop.nome?' per '+S.shop.nome:'')+'.');
- const o=sheet(`<h3>🔒 ${LIC.motivo==='licenza'?'Licenza scaduta':'Prova gratuita terminata'}</h3><div class="sub">I tuoi dati sono al sicuro: puoi vederli e salvarne una copia. Per inserire nuovi clienti e inviare messaggi serve la licenza.</div><div class="prev">${licBuy()}</div><a class="btn w" style="display:block;text-align:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener" href="${wa}">💬 Scrivi su WhatsApp</a><div class="sub fl">Hai già il codice di licenza?</div><input id="pwKey" placeholder="Incolla qui il codice"><div class="err" id="pwErr"></div><button class="btn w" id="pwGo" style="margin-top:8px">Attiva</button><button class="btn o w" style="margin-top:10px" id="pwBk">💾 Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="pwX">Chiudi (solo lettura)</button>`);
- $('#pwX').onclick=()=>o.remove();$('#pwBk').onclick=()=>{o.remove();backupFlow()};
+ const wa='https://wa.me/'+LICWA+'?text='+encodeURIComponent('Buongiorno, vorrei attivare la licenza di Avvisa Clienti'+(S.shop.nome?' per '+S.shop.nome:'')+'. ID del mio telefono: '+DEVID);
+ const o=sheet(`<h3>🔒 ${LIC.motivo==='prova'?'Prova gratuita terminata':licTit()}</h3><div class="sub">I tuoi dati sono al sicuro: puoi vederli e salvarne una copia. Per inserire nuovi clienti e inviare messaggi serve la licenza.</div><div class="prev">${licBuy()}</div>${licId()}<a class="btn w" style="display:block;text-align:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener" href="${wa}">💬 Scrivi su WhatsApp</a><div class="sub fl">Hai già il codice di licenza?</div><input id="pwKey" placeholder="Incolla qui il codice"><div class="err" id="pwErr"></div><button class="btn w" id="pwGo" style="margin-top:8px">Attiva</button><button class="btn o w" style="margin-top:10px" id="pwBk">💾 Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="pwX">Chiudi (solo lettura)</button>`);
+ $('#idCp').onclick=idCopy;$('#pwX').onclick=()=>o.remove();$('#pwBk').onclick=()=>{o.remove();backupFlow()};
  $('#pwGo').onclick=async()=>{const r=await licActivate($('#pwKey').value);if(r){$('#pwErr').textContent=r;return}o.remove();draw();toast('Licenza attivata, grazie!')}}
 {const f=formSheet;formSheet=function(){if(locked()){paywall();return}return f.apply(this,arguments)}}
 {const f=sendOne;sendOne=function(){if(locked()){paywall();return false}return f.apply(this,arguments)}}
@@ -481,7 +486,7 @@ function settings(){
  <h2 style="font-size:15px;margin:18px 0 4px">Altri modelli di messaggio</h2><div class="sub">I testi di ogni tipo di scheda si cambiano dal tipo stesso. Usa {nome} e {negozio}.</div>
  ${[['auguri','🎂 Auguri'],['libero','✏️ Messaggio libero']].concat(fid().on?[['fid','🎟️ Fedeltà (premio pronto)']]:[]).map(([k,n])=>`<div class="sub fl"><b>${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
  <button class="btn w" style="margin-top:12px" id="sSave">Salva</button>
- <h2 style="font-size:15px;margin:14px 0 4px">🔑 Licenza</h2><div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div><input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
+ <h2 style="font-size:15px;margin:14px 0 4px">🔑 Licenza</h2><div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div>${licId()}<input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
  ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Chiede un codice quando apri l’app (e se resta in background più di 2 minuti). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pOff" style="flex:1">Disattiva</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
  <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
@@ -497,6 +502,7 @@ function settings(){
  $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;let j;try{j=JSON.parse(await f.text())}catch(e){toast('Questo file non è una copia valida');return}
   const fin=jj=>{try{if(applyBackup(jj)){o.remove();draw();toast('Dati ripristinati')}}catch(e){toast('Questo file non è una copia valida')}};
   if(j.enc)askPw('Copia protetta','Scrivi la password scelta quando hai salvato la copia.',async pw=>{try{fin(await decObj(j,pw));return''}catch(e){return'Password sbagliata'}});else fin(j)};
+ $('#idCp').onclick=idCopy;
  $('#lcGo').onclick=async()=>{const r=await licActivate($('#lcKey').value);$('#lcErr').textContent=r;if(!r){toast('Licenza attivata, grazie!');o.remove();draw();settings()}};
  const pe=t=>{$('#pErr').textContent=t};
  const on=$('#pOn');if(on)on.onclick=async()=>{const a=$('#pNew').value,b=$('#pNew2').value;if(!/^\d{4,8}$/.test(a))return pe('Il codice deve avere da 4 a 8 cifre');if(a!==b)return pe('I due codici non coincidono');await setPin(a);toast('Blocco attivato');o.remove();settings()};
