@@ -123,7 +123,7 @@ function migrate(d){
 }
 let S=migrate(LS.get('ac_data',null))||{v:2,shop:{nome:'',indirizzo:''},tags:[],tipi:[],clienti:[],schede:[]};
 if(S.v>=2&&!LS.get('ac_data',{}).v)LS.set('ac_data',S);
-S.tags=[];S.clienti.forEach(c=>{delete c.tags});
+S.tags=[];S.clienti.forEach(c=>{delete c.tags});S.prod=S.prod||[];
 const save=()=>LS.set('ac_data',S);
 const cli=id=>S.clienti.find(c=>c.id===id)||{id:'',nome:'(cliente eliminato)',tel:'',tags:[]};
 const tipo=id=>S.tipi.find(t=>t.id===id);
@@ -159,6 +159,45 @@ function fidSheet(c){
  const r=$('#fRit');if(r)r.onclick=()=>{if(!confirm('Consegnare il premio a '+c.nome+' e azzerare i timbri?'))return;const x=fcd(c);x.t=0;x.p=(x.p||0)+1;save();toast('Premio consegnato, si riparte!');again()};
  $('#fSub').onclick=()=>{const x=fcd(c);if(x.t>0){x.t--;save()}again()}}
 
+/* ---------- prodotti / magazzino ---------- */
+const prods=()=>S.prod||(S.prod=[]);
+const isLow=p=>(Number(p.qta)||0)<=0||(Number(p.min)>0&&(Number(p.qta)||0)<=Number(p.min));
+const prodSel=(pk,qk,tk,label)=>{const l=prods().slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));if(!l.length)return'';return `<div class="sub fl">${esc(label)}</div><div style="display:flex;gap:8px"><select data-f="${pk}" data-pk="1" data-tk="${tk}"><option value="">— nessuno —</option>${l.map(p=>`<option value="${p.id}">${esc(p.nome)} (${Number(p.qta)||0} in magazzino)</option>`).join('')}</select><button type="button" class="btn s o" data-scan="${pk}" style="flex:none">📷</button></div><input data-f="${qk}" type="number" inputmode="numeric" value="1" min="1" placeholder="Quantità" style="margin-top:8px">`};
+let scanStream=null;
+function stopScan(){if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}document.getElementById('scov')?.remove()}
+async function scanBarcode(cb){
+ stopScan();
+ const o=document.createElement('div');o.id='scov';o.style.cssText='position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column';
+ o.innerHTML='<video id="scv" playsinline muted style="flex:1;min-height:0;width:100%;object-fit:cover"></video><div style="background:#fff;padding:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom))"><div class="sub" id="scMsg">Inquadra il codice a barre del prodotto</div><div style="display:flex;gap:8px;margin-top:8px"><input id="scMan" placeholder="…oppure scrivi il codice" inputmode="numeric"><button class="btn s" id="scOk" style="flex:none">Usa</button></div><button class="btn o w" style="margin-top:10px" id="scX">Annulla</button></div>';
+ document.body.appendChild(o);
+ const done=code=>{stopScan();if(navigator.vibrate)navigator.vibrate(60);cb(String(code).trim())};
+ o.querySelector('#scX').onclick=stopScan;
+ o.querySelector('#scOk').onclick=()=>{const v=o.querySelector('#scMan').value.trim();if(v)done(v)};
+ const msgEl=o.querySelector('#scMsg'),vid=o.querySelector('#scv');
+ if(!('BarcodeDetector' in window)||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vid.style.display='none';msgEl.textContent='Questo telefono non legge i codici con la fotocamera: scrivi il codice a mano (o usa un lettore Bluetooth).';return}
+ try{scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})}catch(e){vid.style.display='none';msgEl.textContent='Non riesco ad aprire la fotocamera: consenti l’accesso nelle impostazioni del browser, oppure scrivi il codice a mano.';return}
+ vid.srcObject=scanStream;try{await vid.play()}catch(e){}
+ let det;try{det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code']})}catch(e){det=new BarcodeDetector()}
+ const tick=async()=>{if(!document.getElementById('scov'))return;try{const r=await det.detect(vid);if(r.length){done(r[0].rawValue);return}}catch(e){}setTimeout(tick,250)};tick()}
+function editProdotto(p,codice){
+ const n=!p;p=p||{nome:'',codice:codice||'',qta:0,prezzo:'',min:''};
+ formSheet(n?'Nuovo prodotto':'Modifica prodotto',[{k:'nome',label:'Nome del prodotto',value:p.nome,required:true},{k:'codice',label:'Codice a barre (scansiona con 📷 o scrivilo)',type:'code',value:p.codice},{k:'qta',label:'Quantità in magazzino',type:'number',value:p.qta},{k:'prezzo',label:'Prezzo di vendita € (facoltativo)',type:'number',value:p.prezzo},{k:'min',label:'Avvisami quando ne restano (facoltativo)',type:'number',value:p.min}],
+ r=>{if(r.codice&&prods().some(x=>x.codice===r.codice&&x!==p))return'Questo codice è già usato da un altro prodotto';r.qta=Math.max(0,Number(r.qta)||0);r.min=Number(r.min)||'';r.prezzo=r.prezzo===''?'':Number(r.prezzo);if(n)prods().push(Object.assign({id:uid()},r));else Object.assign(p,r)},
+ n?null:()=>{S.prod=prods().filter(x=>x!==p)})}
+function rifornisci(p){
+ const o=sheet(`<h3>📦 ${esc(p.nome)}</h3><div class="sub">${p.codice?'Codice '+esc(p.codice)+' · ':''}${Number(p.prezzo)?eur(p.prezzo)+' · ':''}in magazzino: <b>${Number(p.qta)||0}</b></div><div class="sub fl">Quanti pezzi?</div><input id="rQ" type="number" inputmode="numeric" value="1" min="1"><button class="btn w" id="rAdd" style="margin-top:12px">＋ Aggiungi al magazzino</button><button class="btn o w" id="rSub" style="margin-top:10px">− Togli dal magazzino</button><div style="display:flex;gap:8px;margin-top:10px"><button class="btn o" style="flex:1" id="rEd">Modifica</button><button class="btn o" style="flex:1" id="rX">Chiudi</button></div>`);
+ const q=()=>Math.max(1,Number($('#rQ').value)||1),again=()=>{save();const y=scrollY;draw();scrollTo(0,y);rifornisci(p)};
+ $('#rX').onclick=()=>o.remove();$('#rEd').onclick=()=>editProdotto(p);
+ $('#rAdd').onclick=()=>{p.qta=(Number(p.qta)||0)+q();toast('In magazzino: '+p.qta);again()};
+ $('#rSub').onclick=()=>{p.qta=Math.max(0,(Number(p.qta)||0)-q());toast('In magazzino: '+p.qta);again()}}
+let pq='';
+function vProd(m){
+ const l0=prods(),q=pq.trim().toLowerCase();let l=l0.slice().sort((a,b)=>(isLow(b)-isLow(a))||a.nome.localeCompare(b.nome,'it'));if(q)l=l.filter(p=>p.nome.toLowerCase().includes(q)||String(p.codice).includes(q));
+ const low=l0.filter(isLow).length;
+ m.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn" style="flex:2" data-act="scanProd">📷 Scansiona</button><button class="btn o" style="flex:1" data-act="newProd">＋ Nuovo</button></div><div class="sub" style="margin:0 2px 8px">${l0.length} prodotti${low?' · <b style="color:var(--o)">'+low+' da rifornire</b>':''}. Scansiona un prodotto per rifornirlo o aggiungerlo.</div><input id="pq" placeholder="Cerca per nome o codice" value="${esc(pq)}" style="margin-bottom:10px"><div class="card" style="padding:4px 14px">${l.slice(0,100).map(p=>{const qt=Number(p.qta)||0;return `<div class="row" data-pr="${p.id}"><div class="x"><b>${esc(p.nome)}</b><span class="sub">${p.codice?esc(p.codice):'senza codice'}${Number(p.prezzo)?' · '+eur(p.prezzo):''}</span></div><span class="pill ${qt<=0?'r':isLow(p)?'a':'m'}">${qt<=0?'finito':qt+' pz'}</span></div>`}).join('')||'<div class="empty">Nessun prodotto. Premi 📷 Scansiona o ＋ Nuovo.</div>'}</div>`);
+ const e=$('#pq');e.oninput=()=>{pq=e.value;clearTimeout(vProd.tm);vProd.tm=setTimeout(()=>{draw();const x=$('#pq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
+ m.querySelectorAll('[data-pr]').forEach(r=>r.onclick=()=>rifornisci(prods().find(p=>p.id===r.dataset.pr)));bind(m)}
+
 /* ---------- stato ---------- */
 let fq='',tab='oggi',msg={tipo:null,sel:{},text:'',ch:'sms',q:'',tag:'',manual:''},cq='',ctag='',stipo='',queue=null;
 
@@ -188,7 +227,9 @@ function sendOne(r,text,ch,key){const tel=normTel(r.tel);if(!tel){toast('Manca u
 function sheet(html){document.getElementById('sov')?.remove();const o=document.createElement('div');o.className='ov';o.id='sov';o.innerHTML='<div class="sheet">'+html+'</div>';o.onclick=e=>{if(e.target===o)o.remove()};document.body.appendChild(o);return o}
 function formSheet(title,fields,onSave,onDelete,after){
  const fld=f=>{const v=f.value??'';
-  if(f.type==='acq'){const ts=S.tipi.filter(t=>t.modo==='scadenza');if(!ts.length)return'';return `<div class="sub fl" style="margin-top:16px"><b>${esc(f.label)}</b></div><select data-f="_atid"><option value="">— nessuno —</option>${ts.map(t=>`<option value="${t.id}">${esc(t.icona||'')} ${esc(t.nome)}</option>`).join('')}</select><input data-f="_atit" placeholder="Cosa ha acquistato (facoltativo)" style="margin-top:8px"><div class="sub fl">Data di acquisto</div><input data-f="_adata" type="date" value="${todayIso()}">`}
+  if(f.type==='prod')return prodSel(f.pk,f.qk,f.tk,f.label);
+  if(f.type==='code')return `<div class="sub fl">${esc(f.label)}</div><div style="display:flex;gap:8px"><input data-f="${f.k}" inputmode="numeric" value="${esc(v)}"><button type="button" class="btn s o" data-scanfill="${f.k}" style="flex:none">📷</button></div>`;
+  if(f.type==='acq'){const ts=S.tipi.filter(t=>t.modo==='scadenza');if(!ts.length)return'';return `<div class="sub fl" style="margin-top:16px"><b>${esc(f.label)}</b></div><select data-f="_atid"><option value="">— nessuno —</option>${ts.map(t=>`<option value="${t.id}">${esc(t.icona||'')} ${esc(t.nome)}</option>`).join('')}</select>${prodSel('_apid','_aqta','_atit','Prodotto dal magazzino (facoltativo)')}<input data-f="_atit" placeholder="Cosa ha acquistato (facoltativo)" style="margin-top:8px"><div class="sub fl">Data di acquisto</div><input data-f="_adata" type="date" value="${todayIso()}">`}
   if(f.type==='cliente'){const l=S.clienti.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}"><option value="">＋ Nuovo cliente…</option>${l.map(c=>`<option value="${c.id}" ${c.id===v?'selected':''}>${esc(c.nome)}${c.tel?' · '+esc(c.tel):''}</option>`).join('')}</select><div id="newCli" style="${v?'display:none':''}"><input data-f="_nome" placeholder="Nome e cognome" style="margin-top:8px"><input data-f="_tel" type="tel" inputmode="tel" placeholder="Cellulare" style="margin-top:8px"></div>`}
   if(f.type==='tags')return `<div class="sub fl">${esc(f.label)}</div><div class="chips" id="tagBox" style="flex-wrap:wrap;overflow:visible">${S.tags.map(t=>`<button type="button" class="tagc ${(v||[]).includes(t)?'on':''}" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div><div style="display:flex;gap:8px"><input id="tagNew" placeholder="＋ nuova categoria" style="padding:8px 10px"><button type="button" class="btn s o" id="tagAdd">Aggiungi</button></div>`;
   if(f.type==='select')return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}" ${f.disabled?'disabled':''}>${f.options.map(o=>{const[val,txt]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(val)===String(v)?'selected':''}>${esc(txt)}</option>`}).join('')}</select>`;
@@ -198,6 +239,9 @@ function formSheet(title,fields,onSave,onDelete,after){
  const fin=()=>{o.remove();after?after():draw()};
  const sel=o.querySelector('select[data-f="cid"]');if(sel)sel.onchange=()=>{$('#newCli').style.display=sel.value?'none':''};
  const tb=$('#tagBox');if(tb){const bind=()=>tb.querySelectorAll('.tagc').forEach(b=>b.onclick=()=>b.classList.toggle('on'));bind();$('#tagAdd').onclick=()=>{const n=tc($('#tagNew').value);if(!n)return;if(!S.tags.includes(n))S.tags.push(n);save();const b=document.createElement('button');b.type='button';b.className='tagc on';b.dataset.t=n;b.textContent=n;if(!tb.querySelector('[data-t="'+n.replace(/"/g,'\\"')+'"]'))tb.appendChild(b);bind();$('#tagNew').value=''}}
+ o.querySelectorAll('select[data-pk]').forEach(sl=>sl.onchange=()=>{const pr=prods().find(p=>p.id===sl.value),t=o.querySelector('[data-f="'+sl.dataset.tk+'"]');if(pr&&t&&!t.value)t.value=pr.nome});
+ o.querySelectorAll('[data-scan]').forEach(b=>b.onclick=()=>scanBarcode(code=>{const pr=prods().find(p=>p.codice===code),sl=o.querySelector('[data-f="'+b.dataset.scan+'"]');if(!pr){toast('Prodotto non trovato ('+code+'): aggiungilo da Prodotti');return}sl.value=pr.id;sl.onchange()}));
+ o.querySelectorAll('[data-scanfill]').forEach(b=>b.onclick=()=>scanBarcode(code=>{o.querySelector('[data-f="'+b.dataset.scanfill+'"]').value=code}));
  $('#fX').onclick=()=>o.remove();
  if(onDelete)$('#fDel').onclick=()=>{if(confirm('Eliminare definitivamente?')){onDelete();save();fin()}};
  $('#fOk').onclick=()=>{const r={};o.querySelectorAll('[data-f]').forEach(e=>r[e.dataset.f]=e.value.trim());if(tb)r.tags=[...tb.querySelectorAll('.tagc.on')].map(b=>b.dataset.t);
@@ -205,7 +249,7 @@ function formSheet(title,fields,onSave,onDelete,after){
   delete r._nome;delete r._tel;const err=onSave(r);if(err){$('#fErr').textContent=err;return}save();fin()}}
 
 function editCliente(c){const n=!c;c=c||{tags:[]};formSheet(n?'Nuovo cliente':'Modifica cliente',[{k:'nome',label:'Nome e cognome',value:c.nome,required:true},{k:'tel',label:'Cellulare',type:'tel',value:c.tel},{k:'nasc',label:'Data di nascita (per gli auguri)',type:'date',value:c.nasc},{k:'note',label:'Note',type:'textarea',value:c.note}].concat(n?[{k:'acq',type:'acq',label:'Ha già comprato qualcosa? Dillo qui e lo ricontatto io'}]:[]),
- r=>{r.nome=tc(r.nome);const atid=r._atid,atit=r._atit,adata=r._adata;delete r._atid;delete r._atit;delete r._adata;if(n){const nc=Object.assign({id:uid()},r);S.clienti.push(nc);if(atid)S.schede.push({id:uid(),tid:atid,cid:nc.id,titolo:atit||(tipo(atid)||{}).nome||'',fornitore:'',inizio:adata||todayIso(),data:todayIso(),note:''})}else Object.assign(c,r)},
+ r=>{r.nome=tc(r.nome);const atid=r._atid,atit=r._atit,adata=r._adata,apid=r._apid,aq=Math.max(1,Number(r._aqta)||1);delete r._atid;delete r._atit;delete r._adata;delete r._apid;delete r._aqta;if(n){const nc=Object.assign({id:uid()},r);S.clienti.push(nc);if(atid||apid){const pr=prods().find(p=>p.id===apid),tid=atid||(S.tipi.find(t=>t.modo==='scadenza')||{}).id;if(tid){const sc={id:uid(),tid,cid:nc.id,titolo:atit||(pr?pr.nome:(tipo(tid)||{}).nome)||'',fornitore:'',inizio:adata||todayIso(),data:todayIso(),note:''};if(pr){sc.pid=pr.id;sc.pq=aq;pr.qta=Math.max(0,(Number(pr.qta)||0)-aq)}S.schede.push(sc)}}}else Object.assign(c,r)},
  n?null:()=>{S.clienti=S.clienti.filter(x=>x.id!==c.id);S.schede=S.schede.filter(x=>x.cid!==c.id)})}
 function editScheda(x,tid,cid){
  const n=!x,t=tipo(x?x.tid:tid);if(!t){toast('Prima crea un tipo di scheda nelle impostazioni');return}
@@ -213,10 +257,12 @@ function editScheda(x,tid,cid){
  const f=[{k:'cid',label:'Cliente',type:'cliente',value:x.cid},{k:'titolo',label:t.lt||'Titolo',value:x.titolo,required:true}];
  if(t.modo==='lavoro')f.push({k:'dettaglio',label:t.ld||'Descrizione',value:x.dettaglio},{k:'prezzo',label:'Prezzo al cliente €',type:'number',value:x.prezzo},{k:'stato',label:'Stato',type:'select',options:Object.entries(ST),value:x.stato});
  else{if(t.lf)f.push({k:'fornitore',label:t.lf,value:x.fornitore});f.push({k:'inizio',label:'Data di acquisto (da qui parte il conteggio)',type:'date',value:x.inizio,required:true});if(!n)f.push({k:'chiuso',label:'Stato',type:'select',options:[['','Da ricontattare'],['1','Fatto / chiusa']],value:x.chiuso?'1':''})}
+ if(n&&t.modo==='scadenza'&&prods().length)f.splice(1,0,{type:'prod',pk:'pid',qk:'pq',tk:'titolo',label:'Prodotto dal magazzino (facoltativo)'});
  f.push({k:'note',label:'Note',type:'textarea',value:x.note});
  formSheet((n?'Nuova scheda · ':'Modifica · ')+t.nome,f,r=>{const was=x.stato;if(t.modo==='scadenza')r.chiuso=r.chiuso==='1';
+  if(n&&r.pid){const pr=prods().find(p=>p.id===r.pid),q=Math.max(1,Number(r.pq)||1);r.pq=q;if(pr)pr.qta=Math.max(0,(Number(pr.qta)||0)-q)}else{delete r.pid;delete r.pq}
   if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);S.schede.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
-  n?null:()=>{S.schede=S.schede.filter(v=>v.id!==x.id)})}
+  n?null:()=>{const pr=x.pid&&prods().find(p=>p.id===x.pid);if(pr)pr.qta=(Number(pr.qta)||0)+(Number(x.pq)||1);S.schede=S.schede.filter(v=>v.id!==x.id)})}
 function editTipo(t,after){
  const n=!t;t=t||{modo:'lavoro',icona:'🧰',nome:'',lt:'Oggetto',ld:'Descrizione',dopo:30,giorni:0,tpl:TPL_LAV};
  const sc=t.modo==='scadenza';
@@ -231,7 +277,7 @@ function editTipo(t,after){
   n?null:()=>{if(S.schede.some(x=>x.tid===t.id)&&!confirm('Ci sono schede di questo tipo: verranno eliminate. Continuare?'))return;S.schede=S.schede.filter(x=>x.tid!==t.id);S.tipi=S.tipi.filter(x=>x.id!==t.id)},after)}
 
 /* ---------- disegno ---------- */
-const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['schede','📋','Schede']];
+const TABS=[['oggi','🏠','Oggi'],['msg','✉️','Messaggi'],['clienti','👥','Clienti'],['schede','📋','Schede'],['prod','📦','Prodotti']];
 const tabsNow=()=>fid().on?TABS.concat([['fid','🎟️','Fedeltà']]):TABS;
 function pendingCount(){let n=bdays(0).filter(b=>b.c.tel&&!isSent(b.key)).length;for(const t of S.tipi)n+=dueItems(t).filter(o=>!isSent(o.key)).length;return n}
 function draw(){
@@ -240,11 +286,12 @@ function draw(){
  $('#app').innerHTML=`<header><h1>${esc(S.shop.nome||'Avvisa Clienti')}<small>${S.clienti.length} clienti · dati salvati su questo telefono</small></h1><button id="bSet">⚙️</button></header><main id="main"></main><nav>${tabsNow().map(([k,i,t])=>`<button data-t="${k}" class="${tab===k?'on':''}"><span>${i}</span>${t}${k==='oggi'&&bd?`<i>${bd}</i>`:''}</button>`).join('')}</nav>`;
  $('#bSet').onclick=settings;
  document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;if(tab==='msg'&&!msg.tipo)pickTipo('libero');draw();scrollTo(0,0)});
- ({oggi:vOggi,msg:vMsg,clienti:vClienti,schede:vSchede,fid:vFid})[tab]($('#main'))}
+ ({oggi:vOggi,msg:vMsg,clienti:vClienti,schede:vSchede,fid:vFid,prod:vProd})[tab]($('#main'))}
 
 function vOggi(m){
  const bo=bdays(0);let h='';
  if(!S.clienti.length)h+=`<div class="card"><h2>👋 Benvenuto</h2><div class="sub" style="margin-bottom:10px">Comincia inserendo i tuoi clienti: poi aggiungi le schede e l’app ti ricorda chi avvisare.</div><button class="btn w" data-act="newCli">＋ Aggiungi il primo cliente</button></div>`;
+ const lowP=prods().filter(isLow);if(lowP.length)h+=`<div class="card"><h2>📦 Da rifornire <span class="pill a">${lowP.length}</span></h2>${lowP.slice(0,5).map(p=>`<div class="row"><div class="x"><b>${esc(p.nome)}</b><span class="sub">${(Number(p.qta)||0)<=0?'finito':'ne restano '+p.qta}</span></div><button class="btn s o" data-act="rif" data-id="${p.id}">Rifornisci</button></div>`).join('')}</div>`;
  const lastBk=LS.get('ac_bk',0);if(S.clienti.length&&Date.now()-lastBk>7*864e5)h+=`<div class="card"><h2>💾 Copia di sicurezza</h2><div class="sub" style="margin-bottom:10px">${lastBk?'Ultima copia: '+fmtD(isoOf(new Date(lastBk)))+'.':'Non hai ancora salvato nessuna copia.'} I dati stanno solo su questo telefono: salvane una ogni tanto (serve anche per cambiare telefono).</div><button class="btn w" data-act="backup">Salva ora</button></div>`;
  h+=`<div class="card"><h2>🎂 Compleanni di oggi <span class="pill m">${bo.length}</span></h2>${bo.length?bo.map(b=>`<div class="row"><div class="x"><b>${esc(b.c.nome)}</b><span class="sub">${esc(b.c.tel)||'senza numero'} ${sentTxt(b.key)}</span></div>${b.c.tel?`<button class="btn s ${isSent(b.key)?'o':''}" data-act="auguri" data-id="${b.c.id}">${isSent(b.key)?'Reinvia':'Auguri'}</button>`:''}</div>`).join(''):'<div class="empty">Nessun compleanno oggi.</div>'}</div>`;
  for(const t of S.tipi){const l=dueItems(t);h+=`<div class="card"><h2>${esc(t.icona||'📄')} ${esc(t.nome)} · ${t.modo==='lavoro'?'pronti da riconsegnare':'da ricontattare'} <span class="pill ${l.length&&t.modo==='scadenza'?'a':'m'}">${l.length}</span></h2>${l.length?l.slice(0,6).map(o=>{const c=cli(o.x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(o.info)} ${sentTxt(o.key)}</span></div><button class="btn s ${isSent(o.key)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(o.key)?'Reinvia':'Avvisa'}</button>${isSent(o.key)&&t.modo==='scadenza'?`<button class="btn s o" data-act="fatto" data-id="${o.x.id}">Fatto</button>`:''}</div>`}).join('')+(l.length>6?`<button class="btn o w" style="margin-top:8px" data-act="gotoMsg" data-id="${t.id}">Vedi tutti (${l.length})</button>`:''):'<div class="empty">Niente da fare qui.</div>'}</div>`}
@@ -330,7 +377,7 @@ function vSchede(m){
 
 /* ---------- azioni ---------- */
 function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{const a=b.dataset.act,id=b.dataset.id;
- if(a==='backup')backupFlow();else if(a==='newCli')editCliente();else if(a==='newScheda')editScheda(null,stipo);else if(a==='settings')settings();
+ if(a==='backup')backupFlow();else if(a==='rif')rifornisci(prods().find(p=>p.id===id));else if(a==='newProd')editProdotto();else if(a==='scanProd')scanBarcode(code=>{const p=prods().find(x=>x.codice===code);if(p)rifornisci(p);else{toast('Prodotto nuovo: compila i dati');editProdotto(null,code)}});else if(a==='newCli')editCliente();else if(a==='newScheda')editScheda(null,stipo);else if(a==='settings')settings();
  else if(a==='auguri'){const c=cli(id),r={nome:c.nome,tel:c.tel,vars:{}},k='a|'+c.id+'|'+new Date().getFullYear();if(sendOne(r,fill(tpl('auguri'),r,false),'sms',k))setTimeout(draw,500)}
  else if(a==='avvisa'){const x=S.schede.find(v=>v.id===id),t=tipo(x.tid),o=dueItems(t).find(v=>v.x.id===id);if(!o)return;const r=recOf(o);if(sendOne(r,fill(t.tpl||defTpl('T:'+t.id),r,false),'sms',r.id))setTimeout(draw,500)}
  else if(a==='pronto'){const x=S.schede.find(v=>v.id===id);x.stato='pronto';x.pronto=todayIso();save();draw();toast('Segnata pronta: premi Avvisa per scrivere al cliente')}
@@ -368,7 +415,7 @@ function backupFlow(){
  const o=sheet(`<h3>💾 Copia di sicurezza</h3><div class="sub">Salva un file con tutti i tuoi dati (clienti, schede, modelli). Ti serve per cambiare telefono o se perdi i dati: mandalo su Drive, WhatsApp o email e poi ripristinalo sul telefono nuovo da Impostazioni.</div><div class="sub fl">Password per proteggere il file (consigliata). Se la dimentichi la copia non si può riaprire.</div><input id="bPw" type="password" placeholder="Password (vuoto = file non protetto)"><button class="btn w" id="bGo" style="margin-top:12px">Salva la copia</button><button class="btn o w" style="margin-top:10px" id="bX">Annulla</button>`);
  $('#bX').onclick=()=>o.remove();
  $('#bGo').onclick=async()=>{const pw=$('#bPw').value;let txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()});if(pw){try{txt=await encText(txt,pw)}catch(e){toast('Cifratura non disponibile: salvo senza password')}}o.remove();shareFile(txt,'avvisa-clienti-backup-'+todayIso()+(pw?'-protetto':'')+'.json')}}
-function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.tags=[];S.clienti.forEach(c=>{delete c.tags});save();LS.set('ac_sent',j.sent||{});return true}
+function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.prod=S.prod||[];S.tags=[];S.clienti.forEach(c=>{delete c.tags});save();LS.set('ac_sent',j.sent||{});return true}
 
 /* ---------- primo avvio ---------- */
 function welcome(){
