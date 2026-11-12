@@ -89,23 +89,24 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function normTel(v){let raw=String(v||'').trim();if(!raw)return'';let plus=raw.startsWith('+');let d=raw.replace(/\D/g,'');if(d.startsWith('00')){d=d.slice(2);plus=true}if(!plus&&!(d.startsWith('39')&&d.length>=11))d='39'+d.replace(/^0+(?=3)/,'');if(d.startsWith('39')&&!/^393\d{8,9}$/.test(d))return'';return d.length>=11&&d.length<=15?'+'+d:''}
 function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
 function addMonths(iso,m){const p=String(iso).split('-').map(Number);if(p.length!==3||!p[0])return'';return isoOf(new Date(p[0],p[1]-1+Number(m||0),p[2]))}
+function addDays(iso,n){const p=String(iso).split('-').map(Number);if(p.length!==3||!p[0])return'';return isoOf(new Date(p[0],p[1]-1,p[2]+Number(n||0)))}
 const daysTo=iso=>{const p=String(iso).split('-').map(Number);if(p.length!==3)return 9999;const t=new Date();return Math.round((new Date(p[0],p[1]-1,p[2])-new Date(t.getFullYear(),t.getMonth(),t.getDate()))/86400000)};
 
 /* ---------- tipi di negozio (modelli di partenza) ---------- */
 const TPL_LAV='Buongiorno {nome}, {titolo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!';
 const TPL_SCA='Buongiorno {nome}, ricordiamo la scadenza di {titolo} il {data}. Passi da {negozio}{indirizzo}, siamo a disposizione!';
 const PRESETS={
- telefonia:{nome:'Telefonia / Elettronica',tags:['Privato','Azienda'],tipi:[
+ telefonia:{nome:'Telefonia / Elettronica',tags:[],tipi:[
   {id:'rip',nome:'Riparazione',icona:'🛠️',modo:'lavoro',lt:'Dispositivo (es. iPhone 12)',ld:'Guasto / lavoro',tpl:'Buongiorno {nome}, il suo {titolo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!'},
-  {id:'contr',nome:'Contratto',icona:'📄',modo:'scadenza',lt:'Servizio (luce, gas, fibra…)',lf:'Gestore / fornitore',mesi:12,giorni:30,tpl:'Buongiorno {nome}, il suo contratto {titolo} {fornitore} scade il {data}. Passi da {negozio}{indirizzo} per vedere le nuove offerte!'}]},
- auto:{nome:'Officina / Auto',tags:['Privato','Azienda'],tipi:[
+  {id:'contr',nome:'Contratto',icona:'📄',modo:'scadenza',lt:'Servizio (luce, gas, fibra…)',lf:'Gestore / fornitore',dopo:365,giorni:30,tpl:'Buongiorno {nome}, il suo contratto {titolo} {fornitore} scade il {data}. Passi da {negozio}{indirizzo} per vedere le nuove offerte!'}]},
+ auto:{nome:'Officina / Auto',tags:[],tipi:[
   {id:'lavoro',nome:'Lavoro in officina',icona:'🔧',modo:'lavoro',lt:'Veicolo (modello / targa)',ld:'Intervento',tpl:'Buongiorno {nome}, il suo veicolo {titolo} è pronto per il ritiro presso {negozio}{indirizzo}.{importo} Grazie!'},
-  {id:'tagl',nome:'Tagliando / Revisione',icona:'🚗',modo:'scadenza',lt:'Veicolo (modello / targa)',lf:'Cosa (tagliando, revisione…)',mesi:12,giorni:30,tpl:'Buongiorno {nome}, per {titolo} {fornitore} la scadenza è il {data}. Ci chiami o passi da {negozio}{indirizzo} per prenotare.'}]},
- estetica:{nome:'Parrucchiere / Estetica',tags:['Cliente fisso','Nuovo cliente'],tipi:[
-  {id:'trat',nome:'Promemoria trattamento',icona:'💇',modo:'scadenza',lt:'Trattamento (colore, taglio…)',lf:'',mesi:2,giorni:7,tpl:'Buongiorno {nome}, è ora di pensare al prossimo appuntamento per {titolo}. La aspettiamo da {negozio}{indirizzo}!'}]},
+  {id:'tagl',nome:'Tagliando / Revisione',icona:'🚗',modo:'scadenza',lt:'Veicolo (modello / targa)',lf:'Cosa (tagliando, revisione…)',dopo:365,giorni:30,tpl:'Buongiorno {nome}, per {titolo} {fornitore} la scadenza è il {data}. Ci chiami o passi da {negozio}{indirizzo} per prenotare.'}]},
+ estetica:{nome:'Parrucchiere / Estetica',tags:[],tipi:[
+  {id:'trat',nome:'Promemoria trattamento',icona:'💇',modo:'scadenza',lt:'Trattamento (colore, taglio…)',lf:'',dopo:60,giorni:7,tpl:'Buongiorno {nome}, è ora di pensare al prossimo appuntamento per {titolo}. La aspettiamo da {negozio}{indirizzo}!'}]},
  altro:{nome:'Altro tipo di negozio',tags:[],tipi:[
   {id:'lavoro',nome:'Lavoro da riconsegnare',icona:'🧰',modo:'lavoro',lt:'Oggetto',ld:'Descrizione del lavoro',tpl:TPL_LAV},
-  {id:'prom',nome:'Promemoria con scadenza',icona:'⏰',modo:'scadenza',lt:'Cosa scade',lf:'',mesi:12,giorni:30,tpl:TPL_SCA}]}
+  {id:'prom',nome:'Promemoria con scadenza',icona:'⏰',modo:'scadenza',lt:'Cosa scade',lf:'',dopo:365,giorni:30,tpl:TPL_SCA}]}
 };
 const cloneTipo=(t,id)=>Object.assign({},t,{id:id||uid()});
 
@@ -116,12 +117,13 @@ function migrate(d){
  const tp=LS.get('ac_tpl',{});if(tp.rip)t[0].tpl=String(tp.rip).split('{dispositivo}').join('{titolo}');if(tp.scad)t[1].tpl=String(tp.scad).split('{contratto}').join('{titolo} {fornitore}');
  const schede=[];
  for(const x of d.rip||[])schede.push({id:x.id,tid:'rip',cid:x.cid,titolo:x.disp||'',dettaglio:x.guasto||'',prezzo:x.prezzo,stato:x.stato||'lavorazione',data:x.data,pronto:x.pronto,ritiro:x.ritiro,note:x.note||''});
- for(const x of d.contr||[])schede.push({id:x.id,tid:'contr',cid:x.cid,titolo:x.tipo||'',fornitore:x.gestore||'',inizio:x.inizio,mesi:x.mesi,scad:x.scad,note:x.note||'',chiuso:x.chiuso});
+ for(const x of d.contr||[])schede.push({id:x.id,tid:'contr',cid:x.cid,titolo:x.tipo||'',fornitore:x.gestore||'',inizio:x.inizio,mesi:x.mesi,scad:x.scad||addMonths(x.inizio,x.mesi),note:x.note||'',chiuso:x.chiuso});
  const g=Number(d.shop&&d.shop.giorni)||30;t[1].giorni=g;
  return{v:2,shop:Object.assign({nome:'',indirizzo:''},d.shop),tags:[],tipi:t,clienti:(d.clienti||[]).map(c=>Object.assign({tags:[]},c)),schede};
 }
 let S=migrate(LS.get('ac_data',null))||{v:2,shop:{nome:'',indirizzo:''},tags:[],tipi:[],clienti:[],schede:[]};
 if(S.v>=2&&!LS.get('ac_data',{}).v)LS.set('ac_data',S);
+S.tags=[];S.clienti.forEach(c=>{delete c.tags});
 const save=()=>LS.set('ac_data',S);
 const cli=id=>S.clienti.find(c=>c.id===id)||{id:'',nome:'(cliente eliminato)',tel:'',tags:[]};
 const tipo=id=>S.tipi.find(t=>t.id===id);
@@ -130,7 +132,8 @@ function markSent(key){const s=sent();s[key]=Date.now();LS.set('ac_sent',s)}
 const isSent=key=>sent()[key];
 const sentTxt=key=>{const t=isSent(key);return t?'✓ '+fmtD(isoOf(new Date(t))):''};
 const ST={lavorazione:'In lavorazione',pronto:'Pronto',ritirato:'Ritirato'};
-const scadOf=x=>x.scad||addMonths(x.inizio,x.mesi);
+const tdopo=t=>t&&t.dopo!=null?Number(t.dopo):((t&&Number(t.mesi))||12)*30;
+const scadOf=x=>{if(x.scad)return x.scad;if(x.mesi)return addMonths(x.inizio,x.mesi);return addDays(x.inizio,tdopo(tipo(x.tid)))};
 
 /* ---------- modelli messaggio ---------- */
 const DEF={fid:'Buongiorno {nome}, la tua fidelity card di {negozio} è completa! 🎁 Passa a ritirare: {premio}.',auguri:'Buon compleanno {nome}! 🎂 Tanti auguri da {negozio}.',libero:'Buongiorno {nome}, '};
@@ -163,8 +166,8 @@ let fq='',tab='oggi',msg={tipo:null,sel:{},text:'',ch:'sms',q:'',tag:'',manual:'
 function bdays(maxOff){const t=new Date(),out=[];for(let off=0;off<=maxOff;off++){const d=new Date(t.getFullYear(),t.getMonth(),t.getDate()+off);for(const c of S.clienti){const p=String(c.nasc||'').split('-').map(Number);if(p.length===3&&p[1]===d.getMonth()+1&&p[2]===d.getDate())out.push({c,off,key:'a|'+c.id+'|'+d.getFullYear()})}}return out}
 function dueItems(t){
  if(t.modo==='lavoro')return S.schede.filter(x=>x.tid===t.id&&x.stato==='pronto').map(x=>({x,t,key:'r|'+x.id+'|'+(x.pronto||''),info:(x.titolo||'')+(x.pronto?' · pronto il '+fmtD(x.pronto):'')}));
- const g=Number(t.giorni)||30;
- return S.schede.filter(x=>x.tid===t.id&&!x.chiuso).map(x=>{const d=scadOf(x);return{x,t,d,gg:daysTo(d),key:'s|'+x.id+'|'+d}}).filter(o=>o.d&&o.gg<=g).sort((a,b)=>a.d.localeCompare(b.d)).map(o=>Object.assign(o,{info:(o.gg<0?'scaduto il ':'scade il ')+fmtD(o.d)+' · '+(o.x.titolo||'')+(o.x.fornitore?' '+o.x.fornitore:'')}))}
+ const g=Number(t.giorni)||0;
+ return S.schede.filter(x=>x.tid===t.id&&!x.chiuso).map(x=>{const d=scadOf(x);return{x,t,d,gg:daysTo(d),key:'s|'+x.id+'|'+d}}).filter(o=>o.d&&o.gg<=g).sort((a,b)=>a.d.localeCompare(b.d)).map(o=>Object.assign(o,{info:(o.gg<0?'da ricontattare dal ':'da ricontattare il ')+fmtD(o.d)+' · '+(o.x.titolo||'')+(o.x.fornitore?' '+o.x.fornitore:'')}))}
 const recOf=o=>{const c=cli(o.x.cid);return{id:o.key,nome:c.nome,tel:c.tel,info:o.info,due:true,vars:schedaVars(o.x,o.d)}};
 function recipients(k){
  if(k==='auguri')return bdays(7).map(b=>({id:b.key,nome:b.c.nome,tel:b.c.tel,info:b.off===0?'Oggi':b.off===1?'Domani':'tra '+b.off+' giorni',due:b.off===0,vars:{}}));
@@ -185,6 +188,7 @@ function sendOne(r,text,ch,key){const tel=normTel(r.tel);if(!tel){toast('Manca u
 function sheet(html){document.getElementById('sov')?.remove();const o=document.createElement('div');o.className='ov';o.id='sov';o.innerHTML='<div class="sheet">'+html+'</div>';o.onclick=e=>{if(e.target===o)o.remove()};document.body.appendChild(o);return o}
 function formSheet(title,fields,onSave,onDelete,after){
  const fld=f=>{const v=f.value??'';
+  if(f.type==='acq'){const ts=S.tipi.filter(t=>t.modo==='scadenza');if(!ts.length)return'';return `<div class="sub fl" style="margin-top:16px"><b>${esc(f.label)}</b></div><select data-f="_atid"><option value="">— nessuno —</option>${ts.map(t=>`<option value="${t.id}">${esc(t.icona||'')} ${esc(t.nome)}</option>`).join('')}</select><input data-f="_atit" placeholder="Cosa ha acquistato (facoltativo)" style="margin-top:8px"><div class="sub fl">Data di acquisto</div><input data-f="_adata" type="date" value="${todayIso()}">`}
   if(f.type==='cliente'){const l=S.clienti.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}"><option value="">＋ Nuovo cliente…</option>${l.map(c=>`<option value="${c.id}" ${c.id===v?'selected':''}>${esc(c.nome)}${c.tel?' · '+esc(c.tel):''}</option>`).join('')}</select><div id="newCli" style="${v?'display:none':''}"><input data-f="_nome" placeholder="Nome e cognome" style="margin-top:8px"><input data-f="_tel" type="tel" inputmode="tel" placeholder="Cellulare" style="margin-top:8px"></div>`}
   if(f.type==='tags')return `<div class="sub fl">${esc(f.label)}</div><div class="chips" id="tagBox" style="flex-wrap:wrap;overflow:visible">${S.tags.map(t=>`<button type="button" class="tagc ${(v||[]).includes(t)?'on':''}" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div><div style="display:flex;gap:8px"><input id="tagNew" placeholder="＋ nuova categoria" style="padding:8px 10px"><button type="button" class="btn s o" id="tagAdd">Aggiungi</button></div>`;
   if(f.type==='select')return `<div class="sub fl">${esc(f.label)}</div><select data-f="${f.k}" ${f.disabled?'disabled':''}>${f.options.map(o=>{const[val,txt]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(val)===String(v)?'selected':''}>${esc(txt)}</option>`}).join('')}</select>`;
@@ -200,30 +204,30 @@ function formSheet(title,fields,onSave,onDelete,after){
   for(const f of fields){if(f.type==='cliente'){if(!r.cid){if(!r._nome){$('#fErr').textContent='Scegli un cliente o scrivi il nome del nuovo';return}const c={id:uid(),nome:tc(r._nome),tel:r._tel||'',nasc:'',note:'',tags:[]};S.clienti.push(c);r.cid=c.id}}else if(f.required&&!r[f.k]){$('#fErr').textContent='Manca: '+f.label;return}}
   delete r._nome;delete r._tel;const err=onSave(r);if(err){$('#fErr').textContent=err;return}save();fin()}}
 
-function editCliente(c){const n=!c;c=c||{tags:[]};formSheet(n?'Nuovo cliente':'Modifica cliente',[{k:'nome',label:'Nome e cognome',value:c.nome,required:true},{k:'tel',label:'Cellulare',type:'tel',value:c.tel},{k:'nasc',label:'Data di nascita (per gli auguri)',type:'date',value:c.nasc},{k:'tags',label:'Categorie',type:'tags',value:c.tags},{k:'note',label:'Note',type:'textarea',value:c.note}],
- r=>{r.nome=tc(r.nome);if(n)S.clienti.push(Object.assign({id:uid()},r));else Object.assign(c,r)},
+function editCliente(c){const n=!c;c=c||{tags:[]};formSheet(n?'Nuovo cliente':'Modifica cliente',[{k:'nome',label:'Nome e cognome',value:c.nome,required:true},{k:'tel',label:'Cellulare',type:'tel',value:c.tel},{k:'nasc',label:'Data di nascita (per gli auguri)',type:'date',value:c.nasc},{k:'note',label:'Note',type:'textarea',value:c.note}].concat(n?[{k:'acq',type:'acq',label:'Ha già comprato qualcosa? Dillo qui e lo ricontatto io'}]:[]),
+ r=>{r.nome=tc(r.nome);const atid=r._atid,atit=r._atit,adata=r._adata;delete r._atid;delete r._atit;delete r._adata;if(n){const nc=Object.assign({id:uid()},r);S.clienti.push(nc);if(atid)S.schede.push({id:uid(),tid:atid,cid:nc.id,titolo:atit||(tipo(atid)||{}).nome||'',fornitore:'',inizio:adata||todayIso(),data:todayIso(),note:''})}else Object.assign(c,r)},
  n?null:()=>{S.clienti=S.clienti.filter(x=>x.id!==c.id);S.schede=S.schede.filter(x=>x.cid!==c.id)})}
 function editScheda(x,tid,cid){
  const n=!x,t=tipo(x?x.tid:tid);if(!t){toast('Prima crea un tipo di scheda nelle impostazioni');return}
- x=x||{tid:t.id,cid:cid||'',stato:'lavorazione',mesi:t.mesi||12,inizio:todayIso()};
+ x=x||{tid:t.id,cid:cid||'',stato:'lavorazione',inizio:todayIso()};
  const f=[{k:'cid',label:'Cliente',type:'cliente',value:x.cid},{k:'titolo',label:t.lt||'Titolo',value:x.titolo,required:true}];
  if(t.modo==='lavoro')f.push({k:'dettaglio',label:t.ld||'Descrizione',value:x.dettaglio},{k:'prezzo',label:'Prezzo al cliente €',type:'number',value:x.prezzo},{k:'stato',label:'Stato',type:'select',options:Object.entries(ST),value:x.stato});
- else{if(t.lf)f.push({k:'fornitore',label:t.lf,value:x.fornitore});f.push({k:'inizio',label:'Data di partenza',type:'date',value:x.inizio,required:true},{k:'mesi',label:'Dopo quanti mesi ricontattare',type:'number',value:x.mesi,required:true})}
+ else{if(t.lf)f.push({k:'fornitore',label:t.lf,value:x.fornitore});f.push({k:'inizio',label:'Data di acquisto (da qui parte il conteggio)',type:'date',value:x.inizio,required:true});if(!n)f.push({k:'chiuso',label:'Stato',type:'select',options:[['','Da ricontattare'],['1','Fatto / chiusa']],value:x.chiuso?'1':''})}
  f.push({k:'note',label:'Note',type:'textarea',value:x.note});
- formSheet((n?'Nuova scheda · ':'Modifica · ')+t.nome,f,r=>{const was=x.stato;if(t.modo==='scadenza'){r.mesi=Number(r.mesi)||0;if(r.mesi<=0)return'Scrivi dopo quanti mesi ricontattare il cliente'}
+ formSheet((n?'Nuova scheda · ':'Modifica · ')+t.nome,f,r=>{const was=x.stato;if(t.modo==='scadenza')r.chiuso=r.chiuso==='1';
   if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);S.schede.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
   n?null:()=>{S.schede=S.schede.filter(v=>v.id!==x.id)})}
 function editTipo(t,after){
- const n=!t;t=t||{modo:'lavoro',icona:'🧰',nome:'',lt:'Oggetto',ld:'Descrizione',mesi:12,giorni:30,tpl:TPL_LAV};
+ const n=!t;t=t||{modo:'lavoro',icona:'🧰',nome:'',lt:'Oggetto',ld:'Descrizione',dopo:30,giorni:0,tpl:TPL_LAV};
  const sc=t.modo==='scadenza';
  formSheet(n?'Nuovo tipo di scheda':'Modifica tipo · '+t.nome,[
   {k:'nome',label:'Nome (es. Riparazione, Tagliando…)',value:t.nome,required:true},{k:'icona',label:'Icona (una emoji)',value:t.icona,placeholder:'🛠️'},
   {k:'modo',label:'Come funziona',type:'select',disabled:!n,options:[['lavoro','Lavoro da riconsegnare (in lavorazione → pronto → ritirato)'],['scadenza','Scadenza da ricontattare (dopo N mesi)']],value:t.modo},
   {k:'lt',label:'Nome del primo campo (es. Dispositivo, Veicolo)',value:t.lt},
   {k:'ld',label:'Nome del secondo campo (solo per «lavoro»)',value:t.ld},{k:'lf',label:'Nome del campo fornitore (solo per «scadenza», vuoto = nessuno)',value:t.lf},
-  {k:'mesi',label:'Mesi predefiniti prima di ricontattare (solo scadenza)',type:'number',value:t.mesi},{k:'giorni',label:'Avvisami quanti giorni prima (solo scadenza)',type:'number',value:t.giorni},
+  {k:'dopo',label:'Ricontatta il cliente dopo quanti giorni dall’acquisto (solo scadenza)',type:'number',value:tdopo(t)},{k:'giorni',label:'Avvisami quanti giorni prima (0 = proprio quel giorno)',type:'number',value:t.giorni},
   {k:'tpl',label:'Testo del messaggio ({nome} {titolo} {fornitore} {data} {importo} {negozio} {indirizzo})',type:'textarea',value:t.tpl,h:110}],
-  r=>{r.mesi=Number(r.mesi)||12;r.giorni=Number(r.giorni)||30;if(!r.tpl)r.tpl=r.modo==='lavoro'?TPL_LAV:TPL_SCA;if(n)S.tipi.push(Object.assign({id:uid()},r));else{delete r.modo;Object.assign(t,r)}},
+  r=>{r.dopo=Number(r.dopo)||30;r.giorni=Math.max(0,Number(r.giorni)||0);if(!r.tpl)r.tpl=r.modo==='lavoro'?TPL_LAV:TPL_SCA;if(n)S.tipi.push(Object.assign({id:uid()},r));else{delete r.modo;Object.assign(t,r)}},
   n?null:()=>{if(S.schede.some(x=>x.tid===t.id)&&!confirm('Ci sono schede di questo tipo: verranno eliminate. Continuare?'))return;S.schede=S.schede.filter(x=>x.tid!==t.id);S.tipi=S.tipi.filter(x=>x.id!==t.id)},after)}
 
 /* ---------- disegno ---------- */
@@ -243,7 +247,7 @@ function vOggi(m){
  if(!S.clienti.length)h+=`<div class="card"><h2>👋 Benvenuto</h2><div class="sub" style="margin-bottom:10px">Comincia inserendo i tuoi clienti: poi aggiungi le schede e l’app ti ricorda chi avvisare.</div><button class="btn w" data-act="newCli">＋ Aggiungi il primo cliente</button></div>`;
  const lastBk=LS.get('ac_bk',0);if(S.clienti.length&&Date.now()-lastBk>7*864e5)h+=`<div class="card"><h2>💾 Copia di sicurezza</h2><div class="sub" style="margin-bottom:10px">${lastBk?'Ultima copia: '+fmtD(isoOf(new Date(lastBk)))+'.':'Non hai ancora salvato nessuna copia.'} I dati stanno solo su questo telefono: salvane una ogni tanto (serve anche per cambiare telefono).</div><button class="btn w" data-act="backup">Salva ora</button></div>`;
  h+=`<div class="card"><h2>🎂 Compleanni di oggi <span class="pill m">${bo.length}</span></h2>${bo.length?bo.map(b=>`<div class="row"><div class="x"><b>${esc(b.c.nome)}</b><span class="sub">${esc(b.c.tel)||'senza numero'} ${sentTxt(b.key)}</span></div>${b.c.tel?`<button class="btn s ${isSent(b.key)?'o':''}" data-act="auguri" data-id="${b.c.id}">${isSent(b.key)?'Reinvia':'Auguri'}</button>`:''}</div>`).join(''):'<div class="empty">Nessun compleanno oggi.</div>'}</div>`;
- for(const t of S.tipi){const l=dueItems(t);h+=`<div class="card"><h2>${esc(t.icona||'📄')} ${esc(t.nome)} · ${t.modo==='lavoro'?'pronti da riconsegnare':'da ricontattare'} <span class="pill ${l.length&&t.modo==='scadenza'?'a':'m'}">${l.length}</span></h2>${l.length?l.slice(0,6).map(o=>{const c=cli(o.x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(o.info)} ${sentTxt(o.key)}</span></div><button class="btn s ${isSent(o.key)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(o.key)?'Reinvia':'Avvisa'}</button></div>`}).join('')+(l.length>6?`<button class="btn o w" style="margin-top:8px" data-act="gotoMsg" data-id="${t.id}">Vedi tutti (${l.length})</button>`:''):'<div class="empty">Niente da fare qui.</div>'}</div>`}
+ for(const t of S.tipi){const l=dueItems(t);h+=`<div class="card"><h2>${esc(t.icona||'📄')} ${esc(t.nome)} · ${t.modo==='lavoro'?'pronti da riconsegnare':'da ricontattare'} <span class="pill ${l.length&&t.modo==='scadenza'?'a':'m'}">${l.length}</span></h2>${l.length?l.slice(0,6).map(o=>{const c=cli(o.x.cid);return `<div class="row"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(o.info)} ${sentTxt(o.key)}</span></div><button class="btn s ${isSent(o.key)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(o.key)?'Reinvia':'Avvisa'}</button>${isSent(o.key)&&t.modo==='scadenza'?`<button class="btn s o" data-act="fatto" data-id="${o.x.id}">Fatto</button>`:''}</div>`}).join('')+(l.length>6?`<button class="btn o w" style="margin-top:8px" data-act="gotoMsg" data-id="${t.id}">Vedi tutti (${l.length})</button>`:''):'<div class="empty">Niente da fare qui.</div>'}</div>`}
  m.insertAdjacentHTML('beforeend',h);bind(m)}
 
 function pickTipo(k){msg.tipo=k;msg.sel={};msg.q='';msg.tag='';msg.manual='';msg.text=tpl(k);if(k!=='libero')recipients(k).forEach(x=>{if(x.due&&normTel(x.tel)&&!isSent(x.id))msg.sel[x.id]={r:x}})}
@@ -288,7 +292,7 @@ function clienteSheet(c){
  const tel=normTel(c.tel),sc=S.schede.filter(x=>x.cid===c.id);
  const o=sheet(`<h3>${esc(c.nome)}</h3><div class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · nato il '+fmtD(c.nasc):''}</div>${(c.tags||[]).length?`<div style="margin-top:6px">${c.tags.map(g=>`<span class="pill">${esc(g)}</span>`).join(' ')}</div>`:''}${c.note?`<div class="prev">${esc(c.note)}</div>`:''}
  ${tel?`<div style="display:flex;gap:8px;margin:12px 0"><a class="btn o" style="flex:1;text-align:center;text-decoration:none" href="tel:${tel}">📞 Chiama</a><button class="btn o" style="flex:1" id="cSms">✉️ Scrivi</button><a class="btn o" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${tel.replace('+','')}">WhatsApp</a></div>`:''}
- <h2 style="font-size:15px;margin:14px 0 4px">Schede</h2>${sc.length?sc.map(x=>{const t=tipo(x.tid)||{nome:'?',icona:'📄',modo:'lavoro'};return `<div class="row" data-es="${x.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)} · ${esc(x.titolo||'')}</b><span class="sub">${t.modo==='lavoro'?fmtD(x.data)+(x.dettaglio?' · '+esc(x.dettaglio):''):'da ricontattare il '+fmtD(scadOf(x))}</span></div>${t.modo==='lavoro'?`<span class="pill ${x.stato==='pronto'?'':'m'}">${ST[x.stato]}</span>`:''}</div>`}).join(''):'<div class="sub">Nessuna.</div>'}
+ <h2 style="font-size:15px;margin:14px 0 4px">Schede</h2>${sc.length?sc.map(x=>{const t=tipo(x.tid)||{nome:'?',icona:'📄',modo:'lavoro'};return `<div class="row" data-es="${x.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)} · ${esc(x.titolo||'')}</b><span class="sub">${t.modo==='lavoro'?fmtD(x.data)+(x.dettaglio?' · '+esc(x.dettaglio):''):(x.chiuso?'fatto':'da ricontattare il '+fmtD(scadOf(x)))}</span></div>${t.modo==='lavoro'?`<span class="pill ${x.stato==='pronto'?'':'m'}">${ST[x.stato]}</span>`:''}</div>`}).join(''):'<div class="sub">Nessuna.</div>'}
  ${S.tipi.length?`<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${S.tipi.map(t=>`<button class="btn o s" data-nt="${t.id}">＋ ${esc(t.icona||'')} ${esc(t.nome)}</button>`).join('')}</div>`:''}
  ${fid().on?'<button class="btn o w" style="margin-top:12px" id="cFid">🎟️ Fidelity card ('+fget(c).t+'/'+fnum()+')</button>':''}<button class="btn o w" style="margin-top:12px" id="cEd">Modifica cliente</button><button class="btn o w" style="margin-top:10px" id="cClose">Chiudi</button>`);
  $('#cClose').onclick=()=>o.remove();const cf=$('#cFid');if(cf)cf.onclick=()=>fidSheet(c);$('#cEd').onclick=()=>editCliente(c);
@@ -318,8 +322,8 @@ function vSchede(m){
   sec=(ti,l,kind)=>`<div class="card"><h2>${ti} <span class="pill m">${l.length}</span></h2>${l.length?l.slice(0,kind==='rit'?20:200).map(x=>{const k='r|'+x.id+'|'+(x.pronto||''),c=cli(x.cid);return `<div class="row"><div class="x" data-es="${x.id}"><b>${esc(c.nome)} · ${esc(x.titolo||'')}</b><span class="sub">${esc(x.dettaglio||'')} · ${fmtD(x.data)}${Number(x.prezzo)?' · '+eur(x.prezzo):''} ${kind==='pronto'?sentTxt(k):''}</span></div>${kind==='lav'?`<button class="btn s o" data-act="pronto" data-id="${x.id}">Pronta</button>`:kind==='pronto'?`<button class="btn s ${isSent(k)?'o':''}" data-act="avvisa" data-id="${x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button><button class="btn s o" data-act="ritirata" data-id="${x.id}">Ritirata</button>`:''}</div>`}).join(''):'<div class="empty">Nessuna.</div>'}</div>`;
   h+=sec('✅ Pronte da riconsegnare',g('pronto'),'pronto')+sec('🔧 In lavorazione',g('lavorazione'),'lav')+sec('📦 Ritirate',g('ritirato'),'rit')}
  else{
-  const g=Number(t.giorni)||30,l=all.map(x=>({x,d:scadOf(x),gg:daysTo(scadOf(x))})).sort((a,b)=>a.d.localeCompare(b.d));
-  h+=`<div class="sub" style="margin:0 2px 8px">L’app ti avvisa ${g} giorni prima della data da ricontattare.</div><div class="card" style="padding:4px 14px">${l.map(o=>{const c=cli(o.x.cid),k='s|'+o.x.id+'|'+o.d,due=o.gg<=g;return `<div class="row"><div class="x" data-es="${o.x.id}"><b>${esc(c.nome)} · ${esc(o.x.titolo||'')} ${esc(o.x.fornitore||'')}</b><span class="sub">dal ${fmtD(o.x.inizio)} · ${o.gg<0?'da ricontattare dal':'da ricontattare il'} ${fmtD(o.d)} ${sentTxt(k)}</span></div>${due?`<button class="btn s ${isSent(k)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button>`:`<span class="pill m">tra ${o.gg} gg</span>`}</div>`}).join('')||'<div class="empty">Nessuna scheda inserita.</div>'}</div>`}
+  const g=Number(t.giorni)||0,l=all.filter(x=>!x.chiuso).map(x=>({x,d:scadOf(x),gg:daysTo(scadOf(x))})).sort((a,b)=>a.d.localeCompare(b.d));
+  h+=`<div class="sub" style="margin:0 2px 8px">I clienti compaiono qui da soli: ${tdopo(t)} giorni dopo l’acquisto${g?' (avviso '+g+' giorni prima)':''}.</div><div class="card" style="padding:4px 14px">${l.map(o=>{const c=cli(o.x.cid),k='s|'+o.x.id+'|'+o.d,due=o.gg<=g;return `<div class="row"><div class="x" data-es="${o.x.id}"><b>${esc(c.nome)} · ${esc(o.x.titolo||'')} ${esc(o.x.fornitore||'')}</b><span class="sub">dal ${fmtD(o.x.inizio)} · ${o.gg<0?'da ricontattare dal':'da ricontattare il'} ${fmtD(o.d)} ${sentTxt(k)}</span></div>${due?`<button class="btn s ${isSent(k)?'o':''}" data-act="avvisa" data-id="${o.x.id}">${isSent(k)?'Reinvia':'Avvisa'}</button>${isSent(k)?`<button class="btn s o" data-act="fatto" data-id="${o.x.id}">Fatto</button>`:''}`:`<span class="pill m">tra ${o.gg} gg</span>`}</div>`}).join('')||'<div class="empty">Nessuna scheda inserita.</div>'}</div>`}
  m.insertAdjacentHTML('beforeend',h);
  m.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{stipo=b.dataset.st;draw()});
  m.querySelectorAll('[data-es]').forEach(r=>r.onclick=()=>editScheda(S.schede.find(x=>x.id===r.dataset.es)));bind(m)}
@@ -331,6 +335,7 @@ function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>
  else if(a==='avvisa'){const x=S.schede.find(v=>v.id===id),t=tipo(x.tid),o=dueItems(t).find(v=>v.x.id===id);if(!o)return;const r=recOf(o);if(sendOne(r,fill(t.tpl||defTpl('T:'+t.id),r,false),'sms',r.id))setTimeout(draw,500)}
  else if(a==='pronto'){const x=S.schede.find(v=>v.id===id);x.stato='pronto';x.pronto=todayIso();save();draw();toast('Segnata pronta: premi Avvisa per scrivere al cliente')}
  else if(a==='ritirata'){const x=S.schede.find(v=>v.id===id);x.stato='ritirato';x.ritiro=todayIso();save();draw()}
+ else if(a==='fatto'){const x=S.schede.find(v=>v.id===id);x.chiuso=true;save();draw();toast('Segnato come fatto')}
  else if(a==='gotoFid'){tab='msg';pickTipo('fid');draw();scrollTo(0,0)}
  else if(a==='gotoMsg'){tab='msg';pickTipo('T:'+id);draw();scrollTo(0,0)}
  else if(a==='rubrica'){try{const cs=await navigator.contacts.select(['name','tel'],{multiple:true});let n=0;for(const k of cs){const nome=tc((k.name||[])[0]||''),tel=String((k.tel||[])[0]||'').replace(/\s+/g,'');if(!nome)continue;if(S.clienti.find(c=>c.nome===nome&&c.tel===tel))continue;S.clienti.push({id:uid(),nome,tel,nasc:'',note:'',tags:[]});n++}save();draw();toast(n+' clienti importati')}catch(e){toast('Importazione annullata')}}})}
@@ -363,24 +368,21 @@ function backupFlow(){
  const o=sheet(`<h3>💾 Copia di sicurezza</h3><div class="sub">Salva un file con tutti i tuoi dati (clienti, schede, modelli). Ti serve per cambiare telefono o se perdi i dati: mandalo su Drive, WhatsApp o email e poi ripristinalo sul telefono nuovo da Impostazioni.</div><div class="sub fl">Password per proteggere il file (consigliata). Se la dimentichi la copia non si può riaprire.</div><input id="bPw" type="password" placeholder="Password (vuoto = file non protetto)"><button class="btn w" id="bGo" style="margin-top:12px">Salva la copia</button><button class="btn o w" style="margin-top:10px" id="bX">Annulla</button>`);
  $('#bX').onclick=()=>o.remove();
  $('#bGo').onclick=async()=>{const pw=$('#bPw').value;let txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()});if(pw){try{txt=await encText(txt,pw)}catch(e){toast('Cifratura non disponibile: salvo senza password')}}o.remove();shareFile(txt,'avvisa-clienti-backup-'+todayIso()+(pw?'-protetto':'')+'.json')}}
-function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.tags=S.tags||[];save();LS.set('ac_sent',j.sent||{});return true}
+function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.tags=[];S.clienti.forEach(c=>{delete c.tags});save();LS.set('ac_sent',j.sent||{});return true}
 
 /* ---------- primo avvio ---------- */
 function welcome(){
  const o=sheet(`<h3>Benvenuto 👋</h3><div class="sub">Due domande e sei pronto. Potrai cambiare tutto dalle impostazioni ⚙️.</div><div class="sub fl">Nome del tuo negozio</div><input id="wN" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo, compare nei messaggi)</div><input id="wI" placeholder="es. Via Roma 1, Udine"><div class="sub fl">Che tipo di attività hai?</div><select id="wP">${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${esc(p.nome)}</option>`).join('')}</select><div class="sub" style="margin-top:6px">Sceglie i tipi di scheda e i testi di partenza; puoi aggiungerne o crearne altri quando vuoi.</div><button class="btn w" style="margin-top:14px" id="wGo">Inizia</button>`);
  o.onclick=null;
- $('#wGo').onclick=()=>{const p=PRESETS[$('#wP').value];S.shop.nome=$('#wN').value.trim();S.shop.indirizzo=$('#wI').value.trim();S.tags=p.tags.slice();S.tipi=p.tipi.map(t=>cloneTipo(t));save();o.remove();draw()}}
+ $('#wGo').onclick=()=>{const p=PRESETS[$('#wP').value];S.shop.nome=$('#wN').value.trim();S.shop.indirizzo=$('#wI').value.trim();S.tags=[];S.tipi=p.tipi.map(t=>cloneTipo(t));save();o.remove();draw()}}
 
 /* ---------- impostazioni e backup ---------- */
 function settings(){
  const o=sheet(`<h3>Impostazioni</h3>
  <h2 style="font-size:15px;margin:14px 0 4px">Il tuo negozio</h2><div class="sub">Compare nei messaggi al posto di {negozio} e {indirizzo}.</div>
  <div class="sub fl">Nome del negozio</div><input id="sN" value="${esc(S.shop.nome)}" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo)</div><input id="sI" value="${esc(S.shop.indirizzo)}" placeholder="es. Via Roma 1, Udine">
- <h2 style="font-size:15px;margin:18px 0 4px">Categorie dei clienti</h2><div class="sub">Servono per ordinare i clienti e scrivere solo a un gruppo.</div>
- <div class="chips" style="flex-wrap:wrap;overflow:visible;margin-top:8px">${S.tags.map(g=>`<button class="tagc on" data-deltag="${esc(g)}">${esc(g)} ✕</button>`).join('')||'<span class="sub">Nessuna categoria.</span>'}</div>
- <div style="display:flex;gap:8px"><input id="sTag" placeholder="＋ nuova categoria" style="padding:8px 10px"><button class="btn s o" id="sTagAdd">Aggiungi</button></div>
  <h2 style="font-size:15px;margin:18px 0 4px">Tipi di scheda</h2><div class="sub">Ogni tipo ha il suo elenco, i suoi campi e il suo messaggio (riparazioni, contratti, tagliandi…).</div>
- ${S.tipi.map(t=>`<div class="row" data-et="${t.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)}</b><span class="sub">${t.modo==='lavoro'?'Lavoro da riconsegnare':'Scadenza dopo '+t.mesi+' mesi, avviso '+t.giorni+' giorni prima'}</span></div><span class="sub">✎</span></div>`).join('')}
+ ${S.tipi.map(t=>`<div class="row" data-et="${t.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)}</b><span class="sub">${t.modo==='lavoro'?'Lavoro da riconsegnare':'Ricontatto dopo '+tdopo(t)+' giorni'+(Number(t.giorni)?', avviso '+t.giorni+' giorni prima':'')}</span></div><span class="sub">✎</span></div>`).join('')}
  <button class="btn o w" style="margin-top:10px" id="sNewT">＋ Nuovo tipo di scheda</button>
  <div class="sub fl">Usi l’app per più negozi? Aggiungi i tipi di un’altra attività:</div><div style="display:flex;gap:8px"><select id="sPre">${Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${esc(p.nome)}</option>`).join('')}</select><button class="btn s o" id="sPreAdd">Aggiungi</button></div>
  <h2 style="font-size:15px;margin:18px 0 4px">🎟️ Fidelity card</h2><div class="sub">Tessera a timbri digitale: ogni cliente accumula timbri e alla fine ritira un premio.</div>
@@ -394,11 +396,9 @@ function settings(){
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>`);
  const back=()=>{draw();settings()};
  $('#sX').onclick=()=>o.remove();
- o.querySelectorAll('[data-deltag]').forEach(b=>b.onclick=()=>{const g=b.dataset.deltag;if(!confirm('Eliminare la categoria «'+g+'»? Resta nei clienti solo il resto.'))return;S.tags=S.tags.filter(x=>x!==g);S.clienti.forEach(c=>c.tags=(c.tags||[]).filter(x=>x!==g));save();back()});
- $('#sTagAdd').onclick=()=>{const n=tc($('#sTag').value);if(!n)return;if(!S.tags.includes(n))S.tags.push(n);save();back()};
  o.querySelectorAll('[data-et]').forEach(r=>r.onclick=()=>editTipo(tipo(r.dataset.et),back));
  $('#sNewT').onclick=()=>editTipo(null,back);
- $('#sPreAdd').onclick=()=>{const p=PRESETS[$('#sPre').value];let n=0;for(const t of p.tipi)if(!S.tipi.some(x=>x.nome===t.nome)){S.tipi.push(cloneTipo(t));n++}for(const g of p.tags)if(!S.tags.includes(g))S.tags.push(g);save();toast(n?n+' tipi aggiunti':'Questi tipi ci sono già');back()};
+ $('#sPreAdd').onclick=()=>{const p=PRESETS[$('#sPre').value];let n=0;for(const t of p.tipi)if(!S.tipi.some(x=>x.nome===t.nome)){S.tipi.push(cloneTipo(t));n++}save();toast(n?n+' tipi aggiunti':'Questi tipi ci sono già');back()};
  $('#sSave').onclick=()=>{const ff=fid();ff.on=$('#fOn').checked;ff.n=Math.min(30,Math.max(2,Number($('#fN').value)||10));ff.premio=$('#fP').value.trim()||'un premio in omaggio';S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()};
  $('#sExp').onclick=()=>{o.remove();backupFlow()};
  $('#sImp').onclick=()=>$('#sFl').click();
