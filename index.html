@@ -426,6 +426,7 @@ async function decObj(o,pw){const key=await aesKey(pw,unb64(o.salt),o.iter);cons
 async function pinHash(pin,salt){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);return b64(new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},k,256)))}
 async function setPin(pin){const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('ac_pin',{salt:b64(salt),hash:await pinHash(pin,salt)})}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
+const VER=22;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -523,7 +524,7 @@ function settings(){
  ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Il codice è obbligatorio: l’app lo chiede quando la apri (e se resta in background più di 2 minuti). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
  <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
- <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button>`);
+ <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button><div class="sub" style="text-align:center;margin-top:12px">Versione ${VER}</div>`);
  const back=()=>{draw();settings()};
  $('#sX').onclick=()=>o.remove();
  o.querySelectorAll('[data-et]').forEach(r=>r.onclick=()=>editTipo(tipo(r.dataset.et),back));
