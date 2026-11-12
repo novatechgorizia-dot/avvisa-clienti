@@ -358,7 +358,7 @@ function clienteSheet(c){
  ${tAcq()?`<button class="btn w" style="margin-top:10px" data-nt="${tAcq().id}">＋ Registra nuovo</button>`:''}
  <h2 style="font-size:15px;margin:14px 0 4px">Schede</h2>${sc.length?sc.map(x=>{const t=tipo(x.tid)||{nome:'?',icona:'📄',modo:'lavoro'};return `<div class="row" data-es="${x.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)} · ${esc(x.titolo||'')}</b><span class="sub">${t.modo==='lavoro'?fmtD(x.data)+(x.dettaglio?' · '+esc(x.dettaglio):''):(x.chiuso?'fatto':'da ricontattare il '+fmtD(scadOf(x)))}</span></div>${t.modo==='lavoro'?`<span class="pill ${x.stato==='pronto'?'':'m'}">${ST[x.stato]}</span>`:''}</div>`}).join(''):'<div class="sub">Nessuna.</div>'}
  ${S.tipi.some(t=>t!==tAcq())?`<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${S.tipi.filter(t=>t!==tAcq()).map(t=>`<button class="btn o s" data-nt="${t.id}">＋ ${esc(t.icona||'')} ${esc(t.nome)}</button>`).join('')}</div>`:''}
- ${fid().on?'<button class="btn o w" style="margin-top:12px" id="cFid">🎟️ Fidelity card ('+fget(c).t+'/'+fnum()+')</button>':''}<button class="btn o w" style="margin-top:12px" id="cEd">Modifica cliente</button><button class="btn o w" style="margin-top:10px" id="cClose">Chiudi</button>`);
+ ${fid().on&&hasCons(c)?'<button class="btn o w" style="margin-top:12px" id="cFid">🎟️ Fidelity card ('+fget(c).t+'/'+fnum()+')</button>':''}<button class="btn o w" style="margin-top:12px" id="cEd">Modifica cliente</button><button class="btn o w" style="margin-top:10px" id="cClose">Chiudi</button>`);
  $('#cClose').onclick=()=>o.remove();const cf=$('#cFid');if(cf)cf.onclick=()=>fidSheet(c);$('#cEd').onclick=()=>editCliente(c);
  o.querySelectorAll('[data-nt]').forEach(b=>b.onclick=()=>editScheda(null,b.dataset.nt,c.id));
  o.querySelectorAll('[data-es]').forEach(r=>r.onclick=()=>editScheda(S.schede.find(x=>x.id===r.dataset.es)));
@@ -366,9 +366,9 @@ function clienteSheet(c){
 
 function vFid(m){
  const n=fnum(),f=fid(),q=fq.trim().toLowerCase(),dq=q.replace(/\D/g,'');
- let l=S.clienti.slice();if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&String(c.tel).replace(/\D/g,'').includes(dq)));
+ let l=S.clienti.filter(hasCons);if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&String(c.tel).replace(/\D/g,'').includes(dq)));
  l.sort((a,b)=>(fFull(b)-fFull(a))||(fget(b).t-fget(a).t)||a.nome.localeCompare(b.nome,'it'));
- const nFull=S.clienti.filter(fFull).length,nAct=S.clienti.filter(c=>fget(c).t>0).length;
+ const nFull=S.clienti.filter(hasCons).filter(fFull).length,nAct=S.clienti.filter(c=>hasCons(c)&&fget(c).t>0).length;
  m.insertAdjacentHTML('beforeend',`<div class="card"><h2>🎟️ Fidelity card</h2><div class="sub">Ogni ${n} timbri: ${esc(f.premio)}</div><div class="sub" style="margin-top:6px">Card attive: <b>${nAct}</b> · Premi da consegnare: <b>${nFull}</b></div>${nFull?'<button class="btn o w" style="margin-top:10px" data-act="gotoFid">✉️ Avvisa chi ha il premio pronto</button>':''}</div><input id="fq" placeholder="Cerca cliente per nome o numero" value="${esc(fq)}" style="margin-bottom:10px"><div class="card" style="padding:4px 14px">${l.slice(0,80).map(c=>{const d=fget(c),full=d.t>=n;return `<div class="row" data-fc="${c.id}"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${d.t}/${n} timbri${full?' · 🎁 premio da consegnare':''}</span></div>${full?`<button class="btn s" data-fc2="${c.id}">🎁 Premio</button>`:`<button class="btn s" data-fp="${c.id}">＋ Timbro</button>`}</div>`}).join('')||'<div class="empty">Nessun cliente: aggiungili dalla scheda Clienti.</div>'}</div>`);
  const e=$('#fq');e.oninput=()=>{fq=e.value;clearTimeout(vFid.tm);vFid.tm=setTimeout(()=>{draw();const x=$('#fq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
  m.querySelectorAll('[data-fc]').forEach(r=>r.onclick=()=>fidSheet(cli(r.dataset.fc)));
