@@ -125,6 +125,7 @@ let S=migrate(LS.get('ac_data',null))||{v:2,shop:{nome:'',indirizzo:''},tags:[],
 if(S.v>=2&&!LS.get('ac_data',{}).v)LS.set('ac_data',S);
 S.tags=[];S.clienti.forEach(c=>{delete c.tags});S.prod=S.prod||[];
 const save=()=>LS.set('ac_data',S);
+setTimeout(()=>{if(norm()){save();try{draw()}catch(e){}}},0);
 const hasCons=c=>c.cons===true;
 const cli=id=>S.clienti.find(c=>c.id===id)||{id:'',nome:'(cliente eliminato)',tel:'',tags:[]};
 const tipo=id=>S.tipi.find(t=>t.id===id);
@@ -133,6 +134,12 @@ function markSent(key){const s=sent();s[key]=Date.now();LS.set('ac_sent',s)}
 const isSent=key=>sent()[key];
 const sentTxt=key=>{const t=isSent(key);return t?'✓ '+fmtD(isoOf(new Date(t))):''};
 const ST={lavorazione:'In lavorazione',pronto:'Pronto',ritirato:'Ritirato'};
+const unoT=t=>!!t&&t.modo==='scadenza'&&(t.uno!=null?!!t.uno:!t.lf);
+function norm(){let ch=false;for(const t of S.tipi){if(t.modo!=='scadenza')continue;const l=S.schede.filter(x=>x.tid===t.id);
+ if(!unoT(t)){l.forEach(x=>{if(x.chiusoDa){x.chiuso=false;delete x.chiusoDa;ch=true}});continue}
+ const g={};l.forEach((x,i)=>{if(!x.chiuso&&x.cid)(g[x.cid]=g[x.cid]||[]).push({x,i})});
+ for(const k in g){const a=g[k];if(a.length<2)continue;a.sort((p,q)=>String(q.x.inizio||'').localeCompare(String(p.x.inizio||''))||q.i-p.i);a.slice(1).forEach(o=>{o.x.chiuso=true;o.x.chiusoDa=a[0].x.id;ch=true})}}
+ return ch}
 const tdopo=t=>t&&t.dopo!=null?Number(t.dopo):((t&&Number(t.mesi))||12)*30;
 const scadOf=x=>{if(x.scad)return x.scad;if(x.mesi)return addMonths(x.inizio,x.mesi);return addDays(x.inizio,tdopo(tipo(x.tid)))};
 
@@ -263,7 +270,7 @@ function editScheda(x,tid,cid){
  f.push({k:'note',label:'Note',type:'textarea',value:x.note});
  formSheet((n?'Nuova scheda · ':'Modifica · ')+t.nome,f,r=>{const was=x.stato;if(t.modo==='scadenza')r.chiuso=r.chiuso==='1';
   if(n&&r.pid){const pr=prods().find(p=>p.id===r.pid),q=Math.max(1,Number(r.pq)||1);r.pq=q;if(pr)pr.qta=Math.max(0,(Number(pr.qta)||0)-q)}else{delete r.pid;delete r.pq}
-  if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);if(t.modo==='scadenza')S.schede.forEach(v=>{if(v.tid===t.id&&v.cid===x.cid&&!v.chiuso){v.chiuso=true;v.chiusoDa=x.id}});S.schede.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
+  if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);S.schede.push(x)}else Object.assign(x,r);norm();if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
   n?null:()=>{const pr=x.pid&&prods().find(p=>p.id===x.pid);if(pr)pr.qta=(Number(pr.qta)||0)+(Number(x.pq)||1);S.schede.forEach(v=>{if(v.chiusoDa===x.id){v.chiuso=false;delete v.chiusoDa}});S.schede=S.schede.filter(v=>v.id!==x.id)});
  if(!n&&t.modo==='scadenza'){const ok=$('#fOk'),nb=document.createElement('button');nb.type='button';nb.className='btn w';nb.id='fNew';nb.style.marginBottom='14px';nb.textContent='＋ Registra nuovo: '+(t.icona||'')+' '+t.nome+' per '+cli(x.cid).nome;const h3=ok.closest('.sheet').querySelector('h3');h3.after(nb);const cid=x.cid;nb.onclick=()=>{if(locked()){paywall();return}editScheda(null,t.id,cid)}}}
 function editTipo(t,after){
@@ -275,8 +282,9 @@ function editTipo(t,after){
   {k:'lt',label:'Nome del primo campo (es. Dispositivo, Veicolo)',value:t.lt},
   {k:'ld',label:'Nome del secondo campo (solo per «lavoro»)',value:t.ld},{k:'lf',label:'Nome del campo fornitore (solo per «scadenza», vuoto = nessuno)',value:t.lf},
   {k:'dopo',label:'Ricontatta il cliente dopo quanti giorni dall’acquisto (solo scadenza)',type:'number',value:tdopo(t)},{k:'giorni',label:'Avvisami quanti giorni prima (0 = proprio quel giorno)',type:'number',value:t.giorni},
+  {k:'uno',label:'Se lo stesso cliente ne registra un altro (solo scadenza)',type:'select',options:[['1','Vale solo l’ultimo: il precedente si chiude e il conteggio riparte'],['0','Restano tutti aperti (es. più contratti insieme)']],value:(n?true:unoT(t))?'1':'0'},
   {k:'tpl',label:'Testo del messaggio ({nome} {titolo} {fornitore} {data} {importo} {negozio} {indirizzo})',type:'textarea',value:t.tpl,h:110}],
-  r=>{r.dopo=Number(r.dopo)||30;r.giorni=Math.max(0,Number(r.giorni)||0);if(!r.tpl)r.tpl=r.modo==='lavoro'?TPL_LAV:TPL_SCA;if(n)S.tipi.push(Object.assign({id:uid()},r));else{delete r.modo;Object.assign(t,r)}},
+  r=>{r.uno=r.uno==='1';r.dopo=Number(r.dopo)||30;r.giorni=Math.max(0,Number(r.giorni)||0);if(!r.tpl)r.tpl=r.modo==='lavoro'?TPL_LAV:TPL_SCA;if(n)S.tipi.push(Object.assign({id:uid()},r));else{delete r.modo;Object.assign(t,r)}norm()},
   n?null:()=>{if(S.schede.some(x=>x.tid===t.id)&&!confirm('Ci sono schede di questo tipo: verranno eliminate. Continuare?'))return;S.schede=S.schede.filter(x=>x.tid!==t.id);S.tipi=S.tipi.filter(x=>x.id!==t.id)},after)}
 
 /* ---------- disegno ---------- */
