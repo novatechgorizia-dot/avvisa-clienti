@@ -263,8 +263,8 @@ function editScheda(x,tid,cid){
  f.push({k:'note',label:'Note',type:'textarea',value:x.note});
  formSheet((n?'Nuova scheda · ':'Modifica · ')+t.nome,f,r=>{const was=x.stato;if(t.modo==='scadenza')r.chiuso=r.chiuso==='1';
   if(n&&r.pid){const pr=prods().find(p=>p.id===r.pid),q=Math.max(1,Number(r.pq)||1);r.pq=q;if(pr)pr.qta=Math.max(0,(Number(pr.qta)||0)-q)}else{delete r.pid;delete r.pq}
-  if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);S.schede.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
-  n?null:()=>{const pr=x.pid&&prods().find(p=>p.id===x.pid);if(pr)pr.qta=(Number(pr.qta)||0)+(Number(x.pq)||1);S.schede=S.schede.filter(v=>v.id!==x.id)})}
+  if(n){x=Object.assign({id:uid(),tid:t.id,data:todayIso()},r);if(t.modo==='scadenza')S.schede.forEach(v=>{if(v.tid===t.id&&v.cid===x.cid&&!v.chiuso){v.chiuso=true;v.chiusoDa=x.id}});S.schede.push(x)}else Object.assign(x,r);if(x.stato==='pronto'&&(n||was!=='pronto'))x.pronto=todayIso();if(x.stato==='ritirato'&&(n||was!=='ritirato'))x.ritiro=todayIso()},
+  n?null:()=>{const pr=x.pid&&prods().find(p=>p.id===x.pid);if(pr)pr.qta=(Number(pr.qta)||0)+(Number(x.pq)||1);S.schede.forEach(v=>{if(v.chiusoDa===x.id){v.chiuso=false;delete v.chiusoDa}});S.schede=S.schede.filter(v=>v.id!==x.id)})}
 function editTipo(t,after){
  const n=!t;t=t||{modo:'lavoro',icona:'🧰',nome:'',lt:'Oggetto',ld:'Descrizione',dopo:30,giorni:0,tpl:TPL_LAV};
  const sc=t.modo==='scadenza';
