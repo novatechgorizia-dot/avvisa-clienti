@@ -526,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=25;
+const VER=26;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -634,6 +634,8 @@ function settings(){
  ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Il codice è obbligatorio: l’app lo chiede quando la apri (e se resta in background più di 2 minuti). Se lo dimentichi ti serve il codice di recupero che hai salvato; qui puoi fartene dare uno nuovo (quello vecchio smette di valere). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pRec" style="flex:1">Nuovo codice di recupero</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
  <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
+ <h2 style="font-size:15px;margin:18px 0 4px">Azzera l’app</h2><div class="sub">Cancella clienti, schede, messaggi, codice di blocco e tutto il resto: l’app riparte come nuova. Restano solo la licenza e la data di inizio della prova gratuita.</div>
+ <button class="btn o w" style="margin-top:10px;color:#c0392b" id="sReset">🗑️ Azzera app e cancella i dati</button>
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button><div class="sub" style="text-align:center;margin-top:12px">Versione ${VER}</div>`);
  const back=()=>{draw();settings()};
  $('#sX').onclick=()=>o.remove();
@@ -641,6 +643,12 @@ function settings(){
  $('#sNewT').onclick=()=>editTipo(null,back);
  $('#sSave').onclick=()=>{const ff=fid();ff.on=$('#fOn').checked;ff.n=Math.min(30,Math.max(2,Number($('#fN').value)||10));ff.premio=$('#fP').value.trim()||'un premio in omaggio';S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()};
  $('#sExp').onclick=()=>{o.remove();backupFlow()};
+ $('#sReset').onclick=()=>{if(S.clienti.length&&!confirm('Prima di cancellare tutto, vuoi salvare una copia dei dati?\n\nOK = salva la copia ora\nAnnulla = continua senza copia')===false){o.remove();backupFlow();return}
+  if(!confirm('Cancello TUTTI i dati di questa app (clienti, schede, messaggi, codice di blocco)?\n\nNon si può annullare.'))return;
+  const keep={};['ac_trial','ac_lic','ac_dev'].forEach(k=>{const v=localStorage.getItem(k);if(v!=null)keep[k]=v});
+  try{Object.keys(localStorage).filter(k=>k.startsWith('ac_')&&!(k in keep)).forEach(k=>localStorage.removeItem(k))}catch(e){}
+  try{sessionStorage.clear()}catch(e){}
+  location.reload()};
  $('#sImp').onclick=()=>$('#sFl').click();
  $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;let j;try{j=JSON.parse(await f.text())}catch(e){toast('Questo file non è una copia valida');return}
   const fin=async jj=>{try{if(applyBackup(jj)){await licInit();o.remove();draw();toast('Dati ripristinati')}}catch(e){toast('Questo file non è una copia valida')}};
