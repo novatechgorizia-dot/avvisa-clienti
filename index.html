@@ -357,9 +357,97 @@ function drawQueue(){
  document.body.appendChild(o);$('#qx').onclick=()=>{queue=null;o.remove();draw()};
  if(!done){$('#qskip').onclick=()=>{q.i++;drawQueue()};$('#qgo').onclick=()=>{if(sendOne(r,fill(q.text,r,false),q.ch,r.id)){q.i++;setTimeout(drawQueue,500)}}}}
 
+/* ---------- importa clienti (rubrica, CSV, vCard) ---------- */
+const IMPACC='.csv,.vcf,.vcard,.txt,text/csv,text/vcard,text/x-vcard,text/plain';
+function decText(buf){const u=new Uint8Array(buf);if(u.length>3&&u[0]===0x50&&u[1]===0x4B)return null;
+ if(u[0]===0xFF&&u[1]===0xFE)return new TextDecoder('utf-16le').decode(u).replace(/^﻿/,'');
+ if(u[0]===0xFE&&u[1]===0xFF)return new TextDecoder('utf-16be').decode(u).replace(/^﻿/,'');
+ try{return new TextDecoder('utf-8',{fatal:true}).decode(u).replace(/^﻿/,'')}catch(e){}
+ try{return new TextDecoder('windows-1252').decode(u)}catch(e){return new TextDecoder().decode(u)}}
+function parseCsv(t){let d=';';const m=t.match(/^sep=(.)\r?\n/i);if(m){d=m[1];t=t.slice(m[0].length)}else{const f=t.split(/\r?\n/).find(l=>l.trim())||'';let b=-1;for(const c of [';',',','\t','|']){const n=f.split(c).length-1;if(n>b){b=n;d=c}}}
+ const rows=[];let row=[],f='',q=false;const end=()=>{row.push(f);f='';if(row.some(x=>x.trim()!==''))rows.push(row);row=[]};
+ for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"'&&f==='')q=true;
+  else if(c===d){row.push(f);f=''}
+  else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;end()}
+  else f+=c}
+ end();return rows}
+const pickTel=a=>{a=(a||[]).map(x=>String(x).trim()).filter(Boolean);return a.find(x=>normTel(x))||a[0]||''};
+function parseNasc(s){s=String(s||'').trim();let m;
+ if(m=s.match(/^(\d{4})-?(\d{2})-?(\d{2})/))s=m[1]+'-'+m[2]+'-'+m[3];
+ else if(m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/))s=m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');else return'';
+ const [y,mo,da]=s.split('-').map(Number);const dt=new Date(Date.UTC(y,mo-1,da));return y>=1900&&y<=new Date().getFullYear()&&dt.getUTCMonth()===mo-1&&dt.getUTCDate()===da?s:''}
+function parseVcf(t){const qp=s=>{try{const b=[];s.replace(/=([0-9A-F]{2})|([\s\S])/gi,(m,h,c)=>{b.push(h?parseInt(h,16):c.charCodeAt(0)&255);return''});return new TextDecoder().decode(new Uint8Array(b))}catch(e){return s}};
+ const un=s=>s.replace(/\\([,;nN\\])/g,(m,c)=>/n/i.test(c)?' ':c);
+ t=t.replace(/\r\n?/g,'\n');if(/QUOTED-PRINTABLE/i.test(t))t=t.replace(/=\n/g,'');t=t.replace(/\n[ \t]/g,'');
+ const out=[];let cur=null;
+ for(const line of t.split('\n')){const L=line.trim();if(!L)continue;
+  if(/^BEGIN:VCARD/i.test(L)){cur={fn:'',n:'',cell:[],oth:[],bday:''};continue}
+  if(/^END:VCARD/i.test(L)){if(cur)out.push(cur);cur=null;continue}
+  if(!cur)continue;const i=L.indexOf(':');if(i<0)continue;
+  const [nm,...pa]=L.slice(0,i).replace(/^item\d+\./i,'').split(';'),N=nm.toUpperCase(),P=pa.join(';'),val=L.slice(i+1),v=/QUOTED-PRINTABLE/i.test(P)?qp(val):val;
+  if(N==='FN')cur.fn=un(v).trim();
+  else if(N==='N'){const p=v.split(';').map(x=>un(x).trim());cur.n=[p[1],p[0]].filter(Boolean).join(' ')}
+  else if(N==='TEL'){const x=v.replace(/^tel:/i,'').trim();(/cell|mobile|iphone/i.test(P)?cur.cell:cur.oth).push(x)}
+  else if(N==='BDAY')cur.bday=v}
+ return out.map(c=>({nome:tc(c.fn||c.n),tel:pickTel(c.cell.concat(c.oth)),nasc:parseNasc(c.bday)}))}
+function csvSource(name,rows){
+ const cl=h=>{h=String(h||'').toLowerCase().trim();
+  if(/(cognome|last\s*name|family\s*name|surname)/.test(h))return'c';
+  if(/(^|[^a-z])(tel|telefono|phone|cell|cellulare|mobile|mob|whatsapp)/.test(h)&&!/(type|label|tipo|etichetta|prefisso|country|paese|phonetic|fonetic)/.test(h))return't';
+  if(/(nascita|birth|compleanno|bday)/.test(h)&&!/(luogo|place)/.test(h))return'b';
+  if(/(^|[^a-z])(nome|first\s*name|given\s*name|name|nominativo|cliente|ragione sociale|contatto)/.test(h)&&!/(prefix|suffix|phonetic|prefisso|suffisso|middle|secondo|nick|file as|organi[sz]ation|company|azienda|e-?mail|title|titolo|user)/.test(h))return'n';return''};
+ const cls=rows[0].map(cl),hasHead=cls.some(Boolean),nc=Math.max(...rows.slice(0,50).map(r=>r.length));
+ let head,data,m;
+ if(hasHead){head=rows[0].map((h,i)=>String(h||'').trim()||'Colonna '+(i+1));data=rows.slice(1);m={n:cls.indexOf('n'),c:cls.indexOf('c'),b:cls.indexOf('b'),t:'auto',tcols:cls.map((x,i)=>x==='t'?i:-1).filter(i=>i>=0)}}
+ else{head=Array.from({length:nc},(_,i)=>'Colonna '+(i+1));data=rows;m={n:-1,c:-1,b:-1,t:'auto',tcols:[]}}
+ if(!m.tcols.length){let best=0,bi=-1;for(let i=0;i<nc;i++){const s=data.slice(0,50).filter(r=>String(r[i]||'').replace(/\D/g,'').length>=7).length;if(s>best){best=s;bi=i}}if(bi>=0)m.tcols=[bi]}
+ if(m.n<0){const k=Array.from({length:nc},(_,i)=>i).find(i=>!m.tcols.includes(i)&&i!==m.c&&i!==m.b);m.n=k==null?-1:k}
+ return{label:'File: '+name,head,data,m}}
+function csvItems(s){const{data,m}=s;return data.map(r=>{const g=i=>i>=0?String(r[i]||'').trim():'';
+ const tels=[];(m.t==='auto'?m.tcols:[Number(m.t)]).forEach(i=>g(i).split(/\s*:::\s*|\n/).forEach(x=>x.trim()&&tels.push(x.trim())));
+ return{nome:tc([g(m.n),g(m.c)].filter(Boolean).join(' ')),tel:pickTel(tels),nasc:parseNasc(g(m.b))}})}
+function impBuild(items){const key=t=>{const n=normTel(t);if(n)return n;const d=String(t||'').replace(/\D/g,'');return d.length>=6?d:''};
+ const have=new Set(S.clienti.map(c=>key(c.tel)).filter(Boolean)),r={ok:[],dup:0,noName:0,noTel:0,bad:0};
+ for(const it of items){if(!it.nome){r.noName++;continue}const k=key(it.tel);if(!k){r.noTel++;continue}if(have.has(k)){r.dup++;continue}have.add(k);
+  const v=normTel(it.tel);if(!v)r.bad++;r.ok.push({nome:it.nome,tel:v||String(it.tel).trim(),nasc:it.nasc||''})}
+ return r}
+function importPreview(src){
+ const items=src.data?csvItems(src):src.items,r=impBuild(items),n=r.ok.length;
+ const opt=(v,sel,t)=>`<option value="${v}" ${String(sel)===String(v)?'selected':''}>${esc(t)}</option>`;
+ let map='';
+ if(src.data){const cols=src.head.map((h,i)=>[i,h]),m=src.m;
+  map=`<div class="card" style="padding:10px 12px;margin:10px 0"><div class="sub">Colonne del file (cambiale se non sono giuste)</div>
+  <div class="sub fl">Nome</div><select id="mN">${m.n<0?opt(-1,-1,'— scegli —'):''}${cols.map(([i,h])=>opt(i,m.n,h)).join('')}</select>
+  <div class="sub fl">Cognome (se è in una colonna a parte)</div><select id="mC">${opt(-1,m.c,'— nessuna —')}${cols.map(([i,h])=>opt(i,m.c,h)).join('')}</select>
+  <div class="sub fl">Telefono</div><select id="mT">${opt('auto',m.t,'Automatico (cerca il cellulare)')}${cols.map(([i,h])=>opt(i,m.t,h)).join('')}</select></div>`}
+ const o=sheet(`<h3>Importa clienti</h3><div class="sub">${esc(src.label)}</div>${map}
+ <div class="card" style="padding:12px;margin:10px 0"><b>${n} ${n===1?'nuovo cliente':'nuovi clienti'}</b>
+ ${r.dup?`<div class="sub">${r.dup} già presenti (stesso numero): li salto</div>`:''}${r.noTel?`<div class="sub">${r.noTel} senza numero di telefono: li salto</div>`:''}${r.noName?`<div class="sub">${r.noName} senza nome: li salto</div>`:''}${r.bad?`<div class="sub">${r.bad} con un numero che non è un cellulare valido: li importo, ma non riceveranno SMS/WhatsApp</div>`:''}</div>
+ ${n?`<div class="sub">Anteprima</div><div style="margin-bottom:6px">${r.ok.slice(0,3).map(x=>`<div class="row"><div class="x"><b>${esc(x.nome)}</b><span class="sub">${esc(x.tel)}</span></div></div>`).join('')}${n>3?`<div class="sub" style="padding-top:6px">…e altri ${n-3}</div>`:''}</div>`:''}
+ <div class="sub" style="margin:10px 0">⛔ I clienti importati sono <b>senza consenso</b> alle comunicazioni commerciali: lo spunti dopo, cliente per cliente, solo se ti ha detto di sì.</div>
+ <button class="btn w" id="impGo" ${n?'':'disabled'}>Importa ${n} ${n===1?'cliente':'clienti'}</button><button class="btn o w" id="impBack" style="margin-top:10px">Indietro</button>`);
+ if(src.data){const re=()=>{src.m.n=Number($('#mN').value);src.m.c=Number($('#mC').value);src.m.t=$('#mT').value;importPreview(src)};['#mN','#mC','#mT'].forEach(s=>o.querySelector(s).onchange=re)}
+ $('#impBack').onclick=importFlow;
+ $('#impGo').onclick=()=>{if(!n)return;r.ok.forEach(x=>S.clienti.push({id:uid(),nome:x.nome,tel:x.tel,nasc:x.nasc,note:'',tags:[],cons:false,consData:''}));save();o.remove();draw();toast(n+(n===1?' cliente importato':' clienti importati'))}}
+function importFlow(){
+ const rub=!!(navigator.contacts&&navigator.contacts.select);
+ const o=sheet(`<h3>📥 Importa clienti</h3><div class="sub">Dalla rubrica o da un file. Salto i doppioni (stesso numero); i clienti importati restano <b>senza consenso</b> alle comunicazioni commerciali.</div>
+ ${rub?'<button class="btn w" id="impRub" style="margin-top:12px">📇 Dalla rubrica del telefono</button>':'<div class="sub" style="margin-top:12px">📇 Su questo telefono l’app non può leggere la rubrica (succede su iPhone e su alcuni browser): esporta i contatti in un file e importalo qui sotto.</div>'}
+ <label class="btn ${rub?'o ':''}w" style="display:block;text-align:center;margin-top:10px;cursor:pointer">📄 Da un file (CSV o vCard)<input type="file" id="impFile" accept="${IMPACC}" style="display:none"></label>
+ <details style="margin-top:12px"><summary class="sub" style="cursor:pointer">Come ottengo il file?</summary><div class="sub" style="margin-top:6px;line-height:1.5">• <b>iPhone</b>: da un computer apri icloud.com → Contatti → seleziona tutti → ⚙️ → Esporta vCard, poi passa il file al telefono (e-mail o AirDrop) e salvalo in File.<br>• <b>Android</b>: app Contatti → Impostazioni → Esporta, formato .vcf.<br>• <b>Google Contatti</b> (contacts.google.com): Esporta → Google CSV.<br>• <b>Excel</b>: Salva con nome → CSV. Servono una colonna con il nome e una con il numero.</div></details>
+ <button class="btn o w" id="impX" style="margin-top:12px">Chiudi</button>`);
+ $('#impX').onclick=()=>o.remove();
+ if(rub)$('#impRub').onclick=async()=>{try{const cs=await navigator.contacts.select(['name','tel'],{multiple:true});if(!cs||!cs.length){toast('Nessun contatto scelto');return}
+  importPreview({label:'Dalla rubrica del telefono',items:cs.map(k=>({nome:tc((k.name||[])[0]||''),tel:pickTel((k.tel||[]).map(String)),nasc:''}))})}catch(e){toast('Rubrica non disponibile: usa un file')}};
+ $('#impFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(f.size>15e6){toast('File troppo grande');return}
+  try{const t=decText(await f.arrayBuffer());if(t===null){toast('È un file Excel: aprilo e salvalo come CSV');return}
+   if(/BEGIN:VCARD/i.test(t)){const it=parseVcf(t);if(!it.length){toast('Nel file non ci sono contatti');return}importPreview({label:'File: '+f.name,items:it});return}
+   const rows=parseCsv(t);if(!rows.length){toast('Il file è vuoto');return}importPreview(csvSource(f.name,rows))}catch(err){toast('Non riesco a leggere questo file')}}}
 function vClienti(m){
  const q=cq.trim().toLowerCase(),dq=q.replace(/\D/g,'');let l=S.clienti.slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it'));if(ctag)l=l.filter(c=>(c.tags||[]).includes(ctag));if(ccons==='si')l=l.filter(hasCons);if(ccons==='no')l=l.filter(c=>!hasCons(c));if(q)l=l.filter(c=>c.nome.toLowerCase().includes(q)||(dq.length>=3&&String(c.tel).replace(/\D/g,'').includes(dq)));
- m.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="cq" placeholder="Cerca per nome o numero" value="${esc(cq)}"><button class="btn" data-act="newCli" style="flex:none">＋</button></div><div class="chips"><button data-cc="" class="${ccons?'':'on'}">Tutti</button><button data-cc="si" class="${ccons==='si'?'on':''}">✅ Con consenso</button><button data-cc="no" class="${ccons==='no'?'on':''}">⛔ Senza consenso</button></div>${S.tags.length?`<div class="chips"><button data-ct="" class="${ctag?'':'on'}">Tutti</button>${S.tags.map(g=>`<button data-ct="${esc(g)}" class="${ctag===g?'on':''}">${esc(g)}</button>`).join('')}</div>`:''}${navigator.contacts&&navigator.contacts.select?'<button class="btn o w" style="margin-bottom:10px" data-act="rubrica">📇 Importa dalla rubrica del telefono</button>':''}<div class="sub" style="margin:0 2px 8px">${l.length} clienti${l.length>80?' (mostro i primi 80)':''}</div><div class="card" style="padding:4px 14px">${l.slice(0,80).map(c=>`<div class="row" data-cl="${c.id}"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · 🎂 '+fmtD(c.nasc).slice(0,5):''}${(c.tags||[]).length?' · '+esc(c.tags.join(', ')):''}${hasCons(c)?'':' · ⛔ no consenso'}</span></div><span class="sub">›</span></div>`).join('')||'<div class="empty">Nessun cliente. Premi ＋ per aggiungerne uno.</div>'}</div>`);
+ m.insertAdjacentHTML('beforeend',`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="cq" placeholder="Cerca per nome o numero" value="${esc(cq)}"><button class="btn" data-act="newCli" style="flex:none">＋</button></div><div class="chips"><button data-cc="" class="${ccons?'':'on'}">Tutti</button><button data-cc="si" class="${ccons==='si'?'on':''}">✅ Con consenso</button><button data-cc="no" class="${ccons==='no'?'on':''}">⛔ Senza consenso</button></div>${S.tags.length?`<div class="chips"><button data-ct="" class="${ctag?'':'on'}">Tutti</button>${S.tags.map(g=>`<button data-ct="${esc(g)}" class="${ctag===g?'on':''}">${esc(g)}</button>`).join('')}</div>`:''}<button class="btn o w" style="margin-bottom:10px" data-act="importa">📥 Importa clienti (rubrica o file)</button><div class="sub" style="margin:0 2px 8px">${l.length} clienti${l.length>80?' (mostro i primi 80)':''}</div><div class="card" style="padding:4px 14px">${l.slice(0,80).map(c=>`<div class="row" data-cl="${c.id}"><div class="x"><b>${esc(c.nome)}</b><span class="sub">${esc(c.tel)||'senza numero'}${c.nasc?' · 🎂 '+fmtD(c.nasc).slice(0,5):''}${(c.tags||[]).length?' · '+esc(c.tags.join(', ')):''}${hasCons(c)?'':' · ⛔ no consenso'}</span></div><span class="sub">›</span></div>`).join('')||'<div class="empty">Nessun cliente. Premi ＋ per aggiungerne uno.</div>'}</div>`);
  const e=$('#cq');e.oninput=()=>{cq=e.value;clearTimeout(vClienti.tm);vClienti.tm=setTimeout(()=>{draw();const x=$('#cq');x.focus();x.setSelectionRange(x.value.length,x.value.length)},250)};
  m.querySelectorAll('[data-cc]').forEach(b=>b.onclick=()=>{ccons=b.dataset.cc;draw()});
  m.querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{ctag=b.dataset.ct;draw()});
@@ -415,7 +503,7 @@ function bind(m){m.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>
  else if(a==='fatto'){const x=S.schede.find(v=>v.id===id);x.chiuso=true;save();draw();toast('Segnato come fatto')}
  else if(a==='gotoFid'){tab='msg';pickTipo('fid');draw();scrollTo(0,0)}
  else if(a==='gotoMsg'){tab='msg';pickTipo('T:'+id);draw();scrollTo(0,0)}
- else if(a==='rubrica'){try{const cs=await navigator.contacts.select(['name','tel'],{multiple:true});let n=0;for(const k of cs){const nome=tc((k.name||[])[0]||''),tel=String((k.tel||[])[0]||'').replace(/\s+/g,'');if(!nome)continue;if(S.clienti.find(c=>c.nome===nome&&c.tel===tel))continue;S.clienti.push({id:uid(),nome,tel,nasc:'',note:'',tags:[]});n++}save();draw();toast(n+' clienti importati')}catch(e){toast('Importazione annullata')}}})}
+ else if(a==='importa')importFlow();})}
 
 /* ---------- cifratura, blocco con codice, copia ---------- */
 const b64=u=>{let s='';u.forEach(x=>s+=String.fromCharCode(x));return btoa(s)};
@@ -438,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=23;
+const VER=24;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
