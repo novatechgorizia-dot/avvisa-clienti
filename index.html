@@ -526,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=34;
+const VER=35;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -655,7 +655,7 @@ ${(()=>{const has=!!LS.get('ac_pin',null);return `<div class="sub">Il codice è 
  <details class="sg" data-g="lic"${(window._sOpen||[]).includes("lic")?" open":""}><summary>🔑 Licenza e assistenza</summary>
 <div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div><a class="btn w o" style="display:block;text-align:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="${assistWa()}">🛟 Richiedi l'assistenza (${LICM} € al mese)</a>${licId()}<input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
  </details>
- <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button><div class="sub" style="text-align:center;margin-top:12px">Versione ${VER}</div>`);
+ <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button><div class="sub" style="text-align:center;margin-top:12px">Versione ${VER}<br>© 2026 Novatech di Porcino Danilo – Tutti i diritti riservati</div>`);
  const back=()=>{draw();settings()};
  $('#sX').onclick=()=>o.remove();
  o.querySelectorAll('[data-et]').forEach(r=>r.onclick=()=>editTipo(tipo(r.dataset.et),back));
