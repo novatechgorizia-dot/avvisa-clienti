@@ -526,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=26;
+const VER=27;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -643,8 +643,7 @@ function settings(){
  $('#sNewT').onclick=()=>editTipo(null,back);
  $('#sSave').onclick=()=>{const ff=fid();ff.on=$('#fOn').checked;ff.n=Math.min(30,Math.max(2,Number($('#fN').value)||10));ff.premio=$('#fP').value.trim()||'un premio in omaggio';S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()};
  $('#sExp').onclick=()=>{o.remove();backupFlow()};
- $('#sReset').onclick=()=>{if(S.clienti.length&&!confirm('Prima di cancellare tutto, vuoi salvare una copia dei dati?\n\nOK = salva la copia ora\nAnnulla = continua senza copia')===false){o.remove();backupFlow();return}
-  if(!confirm('Cancello TUTTI i dati di questa app (clienti, schede, messaggi, codice di blocco)?\n\nNon si può annullare.'))return;
+ $('#sReset').onclick=()=>{if(!confirm('Cancello TUTTI i dati di questa app (clienti, schede, messaggi, codice di blocco)?\n\nNon si può annullare. Se non hai ancora salvato una copia, premi Annulla e usa prima «Salva una copia dei dati».'))return;
   const keep={};['ac_trial','ac_lic','ac_dev'].forEach(k=>{const v=localStorage.getItem(k);if(v!=null)keep[k]=v});
   try{Object.keys(localStorage).filter(k=>k.startsWith('ac_')&&!(k in keep)).forEach(k=>localStorage.removeItem(k))}catch(e){}
   try{sessionStorage.clear()}catch(e){}
