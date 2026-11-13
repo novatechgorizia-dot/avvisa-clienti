@@ -526,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=24;
+const VER=25;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -561,8 +561,9 @@ async function shareFile(txt,name){
 function backupFlow(){
  const o=sheet(`<h3>💾 Copia di sicurezza</h3><div class="sub">Salva un file con tutti i tuoi dati (clienti, schede, modelli). Ti serve per cambiare telefono o se perdi i dati: mandalo su Drive, WhatsApp o email e poi ripristinalo sul telefono nuovo da Impostazioni.</div><div class="sub fl">Password per proteggere il file (consigliata). Se la dimentichi la copia non si può riaprire.</div><input id="bPw" type="password" placeholder="Password (vuoto = file non protetto)"><button class="btn w" id="bGo" style="margin-top:12px">Salva la copia</button><button class="btn o w" style="margin-top:10px" id="bX">Annulla</button>`);
  $('#bX').onclick=()=>o.remove();
- $('#bGo').onclick=async()=>{const pw=$('#bPw').value;let txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()});if(pw){try{txt=await encText(txt,pw)}catch(e){toast('Cifratura non disponibile: salvo senza password')}}o.remove();shareFile(txt,'avvisa-clienti-backup-'+todayIso()+(pw?'-protetto':'')+'.json')}}
-function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'))return false;LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.prod=S.prod||[];S.tags=[];S.clienti.forEach(c=>{delete c.tags});save();LS.set('ac_sent',j.sent||{});return true}
+ $('#bGo').onclick=async()=>{const pw=$('#bPw').value;let txt=JSON.stringify({app:'avvisa-clienti',at:new Date().toISOString(),trial:LS.get('ac_trial',null),data:S,tpl:LS.get('ac_tpl',{}),sent:sent()});if(pw){try{txt=await encText(txt,pw)}catch(e){toast('Cifratura non disponibile: salvo senza password')}}o.remove();shareFile(txt,'avvisa-clienti-backup-'+todayIso()+(pw?'-protetto':'')+'.json')}}
+function applyBackup(j){if(j.app!=='avvisa-clienti'||!j.data||!Array.isArray(j.data.clienti))throw 0;const okd=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||''),lt=LS.get('ac_trial',null),best=[okd(j.trial)?j.trial:String(j.at||'').slice(0,10),lt].filter(okd).sort()[0];
+ if(!confirm('Sostituire i dati di questo telefono con quelli della copia del '+fmtD(String(j.at).slice(0,10))+' ('+j.data.clienti.length+' clienti)?'+(best&&best!==lt?'\n\nLa prova gratuita non riparte: conta dalla data del primo utilizzo ('+fmtD(best)+').':'')))return false;if(best)LS.set('ac_trial',best);LS.set('ac_tpl',j.tpl||{});S=migrate(j.data);S.prod=S.prod||[];S.tags=[];S.clienti.forEach(c=>{delete c.tags});save();LS.set('ac_sent',j.sent||{});return true}
 
 /* ---------- prova gratuita e licenza ---------- */
 const LICPUB={"kty":"EC","crv":"P-256","x":"H8FCPS-DiAXbWBd55LY415SzhHNKbm1AvAKO_T5eBfQ","y":"lbAibTXtfuFDzLYhqwXfPCHwUXVcYDFeQ9cKqtGOx9E"};
@@ -642,7 +643,7 @@ function settings(){
  $('#sExp').onclick=()=>{o.remove();backupFlow()};
  $('#sImp').onclick=()=>$('#sFl').click();
  $('#sFl').onchange=async()=>{const f=$('#sFl').files[0];if(!f)return;let j;try{j=JSON.parse(await f.text())}catch(e){toast('Questo file non è una copia valida');return}
-  const fin=jj=>{try{if(applyBackup(jj)){o.remove();draw();toast('Dati ripristinati')}}catch(e){toast('Questo file non è una copia valida')}};
+  const fin=async jj=>{try{if(applyBackup(jj)){await licInit();o.remove();draw();toast('Dati ripristinati')}}catch(e){toast('Questo file non è una copia valida')}};
   if(j.enc)askPw('Copia protetta','Scrivi la password scelta quando hai salvato la copia.',async pw=>{try{fin(await decObj(j,pw));return''}catch(e){return'Password sbagliata'}});else fin(j)};
  $('#idCp').onclick=idCopy;
  $('#lcGo').onclick=async()=>{const r=await licActivate($('#lcKey').value);$('#lcErr').textContent=r;if(!r){toast('Licenza attivata, grazie!');o.remove();draw();settings()}};
