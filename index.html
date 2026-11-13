@@ -526,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=32;
+const VER=33;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -621,28 +621,47 @@ function welcome(){
 /* ---------- impostazioni e backup ---------- */
 function settings(){
  const o=sheet(`<h3>Impostazioni</h3>
- <h2 style="font-size:15px;margin:14px 0 4px">Il tuo negozio</h2><div class="sub">Compare nei messaggi al posto di {negozio} e {indirizzo}.</div>
+ <style>.sg{border:1px solid rgba(128,128,128,.35);border-radius:12px;margin:8px 0;padding:0 12px}.sg>summary{padding:14px 0;font-weight:700;font-size:15px;cursor:pointer;list-style:none}.sg>summary::-webkit-details-marker{display:none}.sg>summary::after{content:'›';float:right;font-size:20px;line-height:18px;transition:.2s}.sg[open]>summary::after{transform:rotate(90deg)}.sg[open]{padding-bottom:12px}</style>
+ <details class="sg" data-g="shop"${(window._sOpen||[]).includes("shop")?" open":""}><summary>🏪 Il tuo negozio</summary>
+<div class="sub" style="margin-top:2px">Compare nei messaggi al posto di {negozio} e {indirizzo}.</div>
  <div class="sub fl">Nome del negozio</div><input id="sN" value="${esc(S.shop.nome)}" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo)</div><input id="sI" value="${esc(S.shop.indirizzo)}" placeholder="es. Via Roma 1, Udine">
- <h2 style="font-size:15px;margin:18px 0 4px">Tipi di scheda</h2><div class="sub">Ogni tipo ha il suo elenco, i suoi campi e il suo messaggio (riparazioni, contratti, tagliandi…).</div>
+ <button class="btn w sSaveB" style="margin-top:12px">Salva</button>
+ </details>
+ <details class="sg" data-g="tipi"${(window._sOpen||[]).includes("tipi")?" open":""}><summary>📋 Tipi di scheda</summary>
+<div class="sub">Ogni tipo ha il suo elenco, i suoi campi e il suo messaggio (riparazioni, contratti, tagliandi…).</div>
  ${S.tipi.map(t=>`<div class="row" data-et="${t.id}"><div class="x"><b>${esc(t.icona||'')} ${esc(t.nome)}</b><span class="sub">${KINDS[kindOf(t)].s+(t.modo==='lavoro'?'':(tdopo(t)?' · dopo '+tdopo(t)+' giorni':'')+(Number(t.giorni)?' · avviso '+t.giorni+' giorni prima':''))}</span></div><span class="sub">✎</span></div>`).join('')}
  <button class="btn o w" style="margin-top:10px" id="sNewT">＋ Nuovo tipo di scheda</button>
- <h2 style="font-size:15px;margin:18px 0 4px">🎟️ Fidelity card</h2><div class="sub">Tessera a timbri digitale: ogni cliente accumula timbri e alla fine ritira un premio.</div>
- <label class="row c" style="margin-top:6px"><input type="checkbox" id="fOn" ${fid().on?'checked':''}><div class="x"><b>Attiva la fidelity card</b></div></label><div class="sub fl">Quanti timbri per il premio</div><input id="fN" type="number" inputmode="numeric" value="${fnum()}"><div class="sub fl">Premio (es. sconto 10 €, pulizia gratis…)</div><input id="fP" value="${esc(fid().premio)}">
- <h2 style="font-size:15px;margin:18px 0 4px">Altri modelli di messaggio</h2><div class="sub">I testi di ogni tipo di scheda si cambiano dal tipo stesso. Usa {nome} e {negozio}.</div>
+ </details>
+ <details class="sg" data-g="msg"${(window._sOpen||[]).includes("msg")?" open":""}><summary>✉️ Altri messaggi</summary>
+<div class="sub">I testi di ogni tipo di scheda si cambiano dal tipo stesso. Usa {nome} e {negozio}.</div>
  ${[['auguri','🎂 Auguri'],['libero','✏️ Messaggio libero']].concat(fid().on?[['fid','🎟️ Fedeltà (premio pronto)']]:[]).map(([k,n])=>`<div class="sub fl"><b>${n}</b></div><textarea data-tp2="${k}" style="min-height:84px">${esc(tpl(k))}</textarea>`).join('')}
- <button class="btn w" style="margin-top:12px" id="sSave">Salva</button>
- <h2 style="font-size:15px;margin:14px 0 4px">🔑 Licenza</h2><div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div><a class="btn w o" style="display:block;text-align:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="${assistWa()}">🛟 Richiedi l'assistenza (${LICM} € al mese)</a>${licId()}<input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
- ${(()=>{const has=!!LS.get('ac_pin',null);return `<h2 style="font-size:15px;margin:18px 0 4px">🔒 Blocco con codice</h2><div class="sub">Il codice è obbligatorio: l’app lo chiede quando la apri (e se resta in background più di 2 minuti). Se lo dimentichi ti serve il codice di recupero che hai salvato; qui puoi fartene dare uno nuovo (quello vecchio smette di valere). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pRec" style="flex:1">Nuovo codice di recupero</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
- <h2 style="font-size:15px;margin:18px 0 4px">Copia di sicurezza</h2><div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
+ <button class="btn w sSaveB" style="margin-top:12px">Salva</button>
+ </details>
+ <details class="sg" data-g="fid"${(window._sOpen||[]).includes("fid")?" open":""}><summary>🎟️ Fidelity card</summary>
+<div class="sub">Tessera a timbri digitale: ogni cliente accumula timbri e alla fine ritira un premio.</div>
+ <label class="row c" style="margin-top:6px"><input type="checkbox" id="fOn" ${fid().on?'checked':''}><div class="x"><b>Attiva la fidelity card</b></div></label><div class="sub fl">Quanti timbri per il premio</div><input id="fN" type="number" inputmode="numeric" value="${fnum()}"><div class="sub fl">Premio (es. sconto 10 €, pulizia gratis…)</div><input id="fP" value="${esc(fid().premio)}">
+ <button class="btn w sSaveB" style="margin-top:12px">Salva</button>
+ </details>
+ <details class="sg" data-g="bk"${(window._sOpen||[]).includes("bk")?" open":""}><summary>💾 Copia di sicurezza e dati</summary>
+<div class="sub">I dati stanno solo su questo telefono: salva ogni tanto una copia (puoi proteggerla con una password). Serve anche per passare a un telefono nuovo.</div>
  <button class="btn o w" style="margin-top:10px" id="sExp">⬇️ Salva una copia dei dati</button><button class="btn o w" style="margin-top:10px" id="sImp">⬆️ Ripristina da una copia</button><input id="sFl" type="file" accept=".json,application/json" style="display:none">
- <h2 style="font-size:15px;margin:18px 0 4px">Azzera l’app</h2><div class="sub">Cancella clienti, schede, messaggi, codice di blocco e tutto il resto: l’app riparte come nuova. Restano solo la licenza e la data di inizio della prova gratuita.</div>
+ <div id="gdSlot"></div>
+<div class="sub" style="margin-top:18px"><b>Azzera l’app</b><br>Cancella clienti, schede, messaggi, codice di blocco e tutto il resto: l’app riparte come nuova. Restano solo la licenza e la data di inizio della prova gratuita.</div>
  <button class="btn o w" style="margin-top:10px;color:#c0392b" id="sReset">🗑️ Azzera app e cancella i dati</button>
+ </details>
+ <details class="sg" data-g="pin"${(window._sOpen||[]).includes("pin")?" open":""}><summary>🔒 Blocco con codice</summary>
+${(()=>{const has=!!LS.get('ac_pin',null);return `<div class="sub">Il codice è obbligatorio: l’app lo chiede quando la apri (e se resta in background più di 2 minuti). Se lo dimentichi ti serve il codice di recupero che hai salvato; qui puoi fartene dare uno nuovo (quello vecchio smette di valere). Nasconde i clienti a chi prende il tuo telefono in mano; per la sicurezza completa tieni anche il blocco schermo del telefono.</div>${has?`<input id="pCur" type="password" inputmode="numeric" placeholder="Codice attuale" style="margin-top:8px"><input id="pNew" type="password" inputmode="numeric" placeholder="Nuovo codice (solo per cambiarlo)" style="margin-top:8px"><div style="display:flex;gap:8px;margin-top:8px"><button class="btn s o" id="pChg" style="flex:1">Cambia codice</button><button class="btn s o" id="pRec" style="flex:1">Nuovo codice di recupero</button></div>`:`<input id="pNew" type="password" inputmode="numeric" placeholder="Scegli un codice (4-8 cifre)" style="margin-top:8px"><input id="pNew2" type="password" inputmode="numeric" placeholder="Ripeti il codice" style="margin-top:8px"><button class="btn s o w" id="pOn" style="margin-top:8px">Attiva il blocco</button>`}<div class="err" id="pErr"></div>`})()}
+ </details>
+ <details class="sg" data-g="lic"${(window._sOpen||[]).includes("lic")?" open":""}><summary>🔑 Licenza e assistenza</summary>
+<div class="sub" style="color:var(--t)">${licText()}</div><div class="sub" style="margin-top:4px">${licBuy()}</div><a class="btn w o" style="display:block;text-align:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="${assistWa()}">🛟 Richiedi l'assistenza (${LICM} € al mese)</a>${licId()}<input id="lcKey" placeholder="Incolla qui il codice di licenza" style="margin-top:8px"><div class="err" id="lcErr"></div><button class="btn s o w" id="lcGo">Attiva il codice</button>
+ </details>
  <button class="btn o w" style="margin-top:10px" id="sX">Chiudi</button><div class="sub" style="text-align:center;margin-top:12px">Versione ${VER}</div>`);
  const back=()=>{draw();settings()};
  $('#sX').onclick=()=>o.remove();
  o.querySelectorAll('[data-et]').forEach(r=>r.onclick=()=>editTipo(tipo(r.dataset.et),back));
  $('#sNewT').onclick=()=>editTipo(null,back);
- $('#sSave').onclick=()=>{const ff=fid();ff.on=$('#fOn').checked;ff.n=Math.min(30,Math.max(2,Number($('#fN').value)||10));ff.premio=$('#fP').value.trim()||'un premio in omaggio';S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()};
+ o.querySelectorAll('details.sg').forEach(d=>d.addEventListener('toggle',()=>{window._sOpen=[...o.querySelectorAll('details.sg[open]')].map(x=>x.dataset.g)}));
+ o.querySelectorAll('.sSaveB').forEach(bt=>bt.onclick=()=>{const ff=fid();ff.on=$('#fOn').checked;ff.n=Math.min(30,Math.max(2,Number($('#fN').value)||10));ff.premio=$('#fP').value.trim()||'un premio in omaggio';S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()});
  $('#sExp').onclick=()=>{o.remove();backupFlow()};
  $('#sReset').onclick=()=>{if(!confirm('Cancello TUTTI i dati di questa app (clienti, schede, messaggi, codice di blocco)?\n\nNon si può annullare. Se non hai ancora salvato una copia, premi Annulla e usa prima «Salva una copia dei dati».'))return;
   const keep={};['ac_trial','ac_lic','ac_dev'].forEach(k=>{const v=localStorage.getItem(k);if(v!=null)keep[k]=v});
@@ -711,7 +730,7 @@ function gdBox(){const c=gdCfg();
  if(!c.on)return `<div id="gdBox"><h2 style="font-size:15px;margin:18px 0 4px">☁️ Copia automatica su Google Drive</h2><div class="sub">Come WhatsApp: scegli ogni quanto salvare e l'app lo fa da sola. Se cambi telefono ripristini tutto.</div><button class="btn w" style="margin-top:10px" onclick="gdAsk()">Collega Google Drive</button><button class="btn o w" style="margin-top:8px" onclick="gdRestore()">Ripristina da Google Drive</button></div>`;
  const ult=c.last?fmtD(isoOf(new Date(c.last)))+' alle '+new Date(c.last).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}):'ancora nessuna';
  return `<div id="gdBox"><h2 style="font-size:15px;margin:18px 0 4px">☁️ Copia automatica su Google Drive</h2><div class="sub" style="color:var(--t)">✅ Collegato come <b>${c.acct?esc(c.acct):'account non ancora letto (premi «Salva adesso»)'}</b><br>Ultima copia: <b>${ult}</b>${c.pw?' · protetta da password':' · senza password'}</div>${c.err?`<div class="err" style="margin-top:6px">${c.err==='reconnect'?'Non sono riuscito a salvare da solo: premi «Salva adesso» per ricollegare Google.':esc(c.err)}</div>`:''}<div class="sub fl">Salva</div><select onchange="gdFreq(this.value)"><option value="d"${c.freq==='d'?' selected':''}>Ogni giorno</option><option value="w"${c.freq==='w'?' selected':''}>Ogni settimana</option><option value="m"${c.freq==='m'?' selected':''}>Ogni mese</option></select><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="flex:1" onclick="gdBackup(true)">Salva adesso</button><button class="btn o" style="flex:1" onclick="gdRestore()">Ripristina</button></div><button class="btn o w" style="margin-top:8px" onclick="gdOff()">Scollega / cambia account</button></div>`}
-{const f=settings;settings=function(){const r=f.apply(this,arguments);try{const x=document.getElementById('sX');if(x&&!document.getElementById('gdBox'))x.insertAdjacentHTML('beforebegin',gdBox())}catch(e){console.error(e)}return r}}
+{const f=settings;settings=function(){const r=f.apply(this,arguments);try{const x=document.getElementById('gdSlot')||document.getElementById('sX');if(x&&!document.getElementById('gdBox'))x.insertAdjacentHTML(x.id==='gdSlot'?'beforeend':'beforebegin',gdBox())}catch(e){console.error(e)}return r}}
 {const f=welcome;welcome=function(){const r=f.apply(this,arguments);try{const g=document.getElementById('wGo');if(g&&!document.getElementById('gdW'))g.insertAdjacentHTML('afterend','<button class="btn o w" id="gdW" style="margin-top:10px" onclick="gdRestore(()=>{try{pinSetup()}catch(e){}})">☁️ Ho già una copia su Google Drive</button>')}catch(e){}return r}}
 {const f=licBanner;licBanner=function(){let h=f.apply(this,arguments);try{const c=gdCfg();if(c.on&&(c.err==='reconnect'||(c.last&&Date.now()-c.last>3*GD_DAYS[c.freq]*864e5)))h+=`<div class="card" style="border:1px solid #e0a090"><div class="sub" style="color:var(--r)"><b>☁️ La copia su Google Drive non è aggiornata</b> (ultima: ${c.last?fmtD(isoOf(new Date(c.last))):'mai'}).</div><button class="btn s w" style="margin-top:8px" onclick="gdBackup(true)">Salva adesso</button></div>`}catch(e){}return h}}
 setTimeout(gdAuto,4000);
