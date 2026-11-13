@@ -594,11 +594,11 @@ async function licActivate(key){
  if(info.e&&info.e<todayIso())return'Questa licenza è scaduta il '+fmtD(info.e);
  LS.set('ac_lic',String(key).replace(/\s+/g,''));await licInit();return''}
 const licText=()=>LIC.st==='ok'?'✅ Licenza attiva'+(LIC.info.n?' per «'+LIC.info.n+'»':'')+(LIC.info.e?' · valida fino al '+fmtD(LIC.info.e):' · a vita'):LIC.st==='prova'?'🎁 Prova gratuita: restano '+LIC.left+(LIC.left===1?' giorno':' giorni'):LIC.st==='scadu'?'⛔ '+(licTit())+': l’app è in sola lettura':'';
-const licBuy=()=>`Mensile ${LICM} € · Annuale ${LICA} € · A vita ${LICV} € · per acquistarla scrivi su WhatsApp al ${LICTEL}`;
+const licBuy=()=>`Licenza: annuale ${LICA} € · a vita ${LICV} €. Assistenza facoltativa (aiuto e configurazione): ${LICM} € al mese, in più. Per acquistare scrivi su WhatsApp al ${LICTEL}`;
 function licBanner(){
  if(LIC.st==='prova')return `<div class="card" style="border:1px solid ${LIC.left<=3?'#e0a090':'#cfd8de'}"><div class="sub" style="color:var(--t)"><b>🎁 Prova gratuita:</b> restano ${LIC.left} ${LIC.left===1?'giorno':'giorni'}.</div><button class="btn s o" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
  if(LIC.st==='scadu')return `<div class="card" style="border:1px solid #e0a090"><div class="sub" style="color:var(--r)"><b>${licTit()}:</b> puoi vedere e salvare i dati, non inserirne di nuovi né inviare messaggi.</div><button class="btn s w" style="margin-top:8px" data-act="settings">Attiva la licenza</button></div>`;
- if(LIC.st==='ok'&&LIC.info.e&&daysTo(LIC.info.e)<=(LIC.info.t==='m'?5:30))return `<div class="card"><div class="sub" style="color:var(--t)"><b>⏳ La licenza scade il ${fmtD(LIC.info.e)}.</b> Per rinnovarla scrivi su WhatsApp al ${LICTEL}.</div></div>`;
+ if(LIC.st==='ok'&&LIC.info.e&&daysTo(LIC.info.e)<=30)return `<div class="card"><div class="sub" style="color:var(--t)"><b>⏳ La licenza scade il ${fmtD(LIC.info.e)}.</b> Per rinnovarla scrivi su WhatsApp al ${LICTEL}.</div></div>`;
  return''}
 function paywall(){
  const wa='https://wa.me/'+LICWA+'?text='+encodeURIComponent('Buongiorno, vorrei attivare la licenza di Avvisa Clienti'+(S.shop.nome?' per '+S.shop.nome:'')+'. ID del mio telefono: '+DEVID);
