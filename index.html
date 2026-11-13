@@ -50,7 +50,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--g)}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 4px;font-size:14px;color:var(--m)}
 .seg button.on{background:#fff;color:var(--t);font-weight:650;box-shadow:0 1px 2px rgba(0,0,0,.1)}
 .ov{position:fixed;inset:0;background:rgba(10,20,30,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
-.sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:90vh;overflow:auto;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+.sheet{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:90vh;overflow:auto;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
 .sheet h3{margin:0 0 4px;font-size:19px}
 .prev{white-space:pre-wrap;background:#f3f6f8;border-radius:11px;padding:11px 12px;font-size:14px;margin:8px 0}
 .lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -526,7 +526,7 @@ function showRec(code){if(!code)return;document.getElementById('recshow')?.remov
  o.querySelector('#rcCopy').onclick=async()=>{try{await navigator.clipboard.writeText(code);toast('Codice copiato')}catch(e){toast('Copia non riuscita: scrivilo a mano')}};
  go.onclick=()=>o.remove()}
 async function checkPin(pin){const p=LS.get('ac_pin',null);if(!p)return true;return await pinHash(pin,unb64(p.salt))===p.hash}
-const VER=33;
+const VER=34;
 let hiddenAt=0,failN=0,lockUntil=0;
 function pinSetup(){
  if(LS.get('ac_pin',null)||document.getElementById('pinset'))return;
@@ -621,7 +621,7 @@ function welcome(){
 /* ---------- impostazioni e backup ---------- */
 function settings(){
  const o=sheet(`<h3>Impostazioni</h3>
- <style>.sg{border:1px solid rgba(128,128,128,.35);border-radius:12px;margin:8px 0;padding:0 12px}.sg>summary{padding:14px 0;font-weight:700;font-size:15px;cursor:pointer;list-style:none}.sg>summary::-webkit-details-marker{display:none}.sg>summary::after{content:'›';float:right;font-size:20px;line-height:18px;transition:.2s}.sg[open]>summary::after{transform:rotate(90deg)}.sg[open]{padding-bottom:12px}</style>
+ <style>.sg{border:1px solid rgba(128,128,128,.35);border-radius:12px;margin:8px 0;padding:0 12px}.sg>summary{padding:14px 0;font-weight:700;font-size:15px;cursor:pointer;list-style:none}.sg>summary::-webkit-details-marker{display:none}.sg>summary::after{content:'›';float:right;font-size:20px;line-height:18px;transition:.2s}.sg[open]>summary::after{transform:rotate(90deg)}.sg[open]{padding-bottom:12px}.sg:last-of-type{margin-bottom:60px}</style>
  <details class="sg" data-g="shop"${(window._sOpen||[]).includes("shop")?" open":""}><summary>🏪 Il tuo negozio</summary>
 <div class="sub" style="margin-top:2px">Compare nei messaggi al posto di {negozio} e {indirizzo}.</div>
  <div class="sub fl">Nome del negozio</div><input id="sN" value="${esc(S.shop.nome)}" placeholder="es. Riparazioni Rossi"><div class="sub fl">Indirizzo (facoltativo)</div><input id="sI" value="${esc(S.shop.indirizzo)}" placeholder="es. Via Roma 1, Udine">
@@ -660,7 +660,7 @@ ${(()=>{const has=!!LS.get('ac_pin',null);return `<div class="sub">Il codice è 
  $('#sX').onclick=()=>o.remove();
  o.querySelectorAll('[data-et]').forEach(r=>r.onclick=()=>editTipo(tipo(r.dataset.et),back));
  $('#sNewT').onclick=()=>editTipo(null,back);
- o.querySelectorAll('details.sg').forEach(d=>d.addEventListener('toggle',()=>{window._sOpen=[...o.querySelectorAll('details.sg[open]')].map(x=>x.dataset.g)}));
+ o.querySelectorAll('details.sg').forEach(d=>d.addEventListener('toggle',()=>{if(d.open){o.querySelectorAll('details.sg[open]').forEach(x=>{if(x!==d)x.open=false});setTimeout(()=>d.scrollIntoView({block:'start',behavior:'smooth'}),30)}window._sOpen=[...o.querySelectorAll('details.sg[open]')].map(x=>x.dataset.g)}));
  o.querySelectorAll('.sSaveB').forEach(bt=>bt.onclick=()=>{const ff=fid();ff.on=$('#fOn').checked;ff.n=Math.min(30,Math.max(2,Number($('#fN').value)||10));ff.premio=$('#fP').value.trim()||'un premio in omaggio';S.shop.nome=$('#sN').value.trim();S.shop.indirizzo=$('#sI').value.trim();const s={};o.querySelectorAll('[data-tp2]').forEach(t=>{if(t.value.trim()&&t.value!==DEF[t.dataset.tp2])s[t.dataset.tp2]=t.value});LS.set('ac_tpl',s);save();msg.text=msg.tipo?tpl(msg.tipo):'';toast('Salvato');o.remove();draw()});
  $('#sExp').onclick=()=>{o.remove();backupFlow()};
  $('#sReset').onclick=()=>{if(!confirm('Cancello TUTTI i dati di questa app (clienti, schede, messaggi, codice di blocco)?\n\nNon si può annullare. Se non hai ancora salvato una copia, premi Annulla e usa prima «Salva una copia dei dati».'))return;
